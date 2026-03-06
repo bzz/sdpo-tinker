@@ -1,0 +1,2 @@
+tinker-cookbook @ git+https://github.com/thinking-machines-lab/tinker-cookbook.git@aae9dac6d34c59b0edfaf03009ff4cc9607376ac
+rich==14.3.3
