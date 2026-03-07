@@ -36,10 +36,9 @@ from tinker_cookbook.recipes.code_rl.code_env import (
     _load_deepcoder_split,
     _normalize_tests,
 )
-from tinker_cookbook.recipes.code_rl.code_grading import (
-    extract_code_from_model,
-    sandbox_check_correctness,
-)
+from tinker_cookbook.recipes.code_rl.code_grading import extract_code_from_model
+
+from sandbox import grade_code
 from tinker_cookbook.rl.types import (
     Action,
     Env,
@@ -125,8 +124,10 @@ def load_tasks(n: int | None = None, split: str = "test", seed: int = 42) -> lis
 # ---------------------------------------------------------------------------
 
 
-async def grade(task: Task, code: str, timeout: int = 6) -> tuple[bool, dict[str, Any]]:
-    return await sandbox_check_correctness(task.tests, code, timeout=timeout)
+async def grade(
+    task: Task, code: str, timeout: int = 6, backend: str = "sandboxfusion"
+) -> tuple[bool, dict[str, Any]]:
+    return await grade_code(task.tests, code, timeout=timeout, backend=backend)
 
 
 # ---------------------------------------------------------------------------
@@ -240,10 +241,12 @@ class SDPOCodeEnv(Env):
         task: Task,
         renderer: renderers.Renderer,
         timeout: int = 6,
+        backend: str = "sandboxfusion",
     ):
         self.task = task
         self.renderer = renderer
         self.timeout = timeout
+        self.backend = backend
         # Populated by step()
         self.passed: bool = False
         self.feedback: str = ""
@@ -267,7 +270,7 @@ class SDPOCodeEnv(Env):
         self.passed = False
         self.feedback = ""
         if self.code is not None:
-            passed, details = await grade(self.task, self.code, timeout=self.timeout)
+            passed, details = await grade(self.task, self.code, timeout=self.timeout, backend=self.backend)
             self.passed = passed
             if not passed:
                 self.feedback = format_feedback(details)
@@ -364,6 +367,7 @@ class SDPOCodeGroupBuilder(EnvGroupBuilder):
     renderer_name: str | None = None
     renderer: renderers.Renderer | None = None
     timeout: int = 6
+    backend: str = "sandboxfusion"
 
     async def make_envs(self) -> Sequence[SDPOCodeEnv]:
         if self.renderer is not None:
@@ -373,7 +377,7 @@ class SDPOCodeGroupBuilder(EnvGroupBuilder):
             name = self.renderer_name or self.model_name
             r = renderers.get_renderer(name, tokenizer)
         return [
-            SDPOCodeEnv(task=self.task, renderer=r, timeout=self.timeout)
+            SDPOCodeEnv(task=self.task, renderer=r, timeout=self.timeout, backend=self.backend)
             for _ in range(self.group_size)
         ]
 

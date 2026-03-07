@@ -240,6 +240,7 @@ async def _handle_generate(
     temperature: float,
     max_tokens: int,
     n: int = 1,
+    sandbox: str = "sandboxfusion",
 ) -> None:
     """Run the [g]enerate flow using the real SDPOCodeEnv via do_group_rollout."""
 
@@ -248,6 +249,7 @@ async def _handle_generate(
         group_size=n,
         renderer=renderer,
         timeout=6,
+        backend=sandbox,
     )
     policy = TinkerTokenCompleter(
         sampling_client=sampling_client,
@@ -373,8 +375,46 @@ async def _handle_generate(
 
 
 # ---------------------------------------------------------------------------
+# Non-interactive generate mode
+# ---------------------------------------------------------------------------
+
+
+async def generate_mode(
+    tasks: list[Task],
+    sampling_client: tinker.SamplingClient,
+    renderer: renderers.Renderer,
+    tokenizer: Any,
+    temperature: float,
+    max_tokens: int,
+    n: int,
+    sandbox: str,
+) -> None:
+    """Run _handle_generate for each task non-interactively and exit."""
+    _print_sandbox_info(sandbox, len(tasks))
+    gen_hint = " [bold yellow]g[/bold yellow]enerate |" if sampling_client else ""
+    console.print(f"Commands:{gen_hint} [bold yellow]n[/bold yellow]ext | [bold yellow]q[/bold yellow]uit | Enter to submit code\n")
+    for i, task in enumerate(tasks):
+        print_problem(i, len(tasks), task)
+        await _handle_generate(
+            task, sampling_client, renderer, tokenizer,
+            temperature, max_tokens, n=n, sandbox=sandbox,
+        )
+    console.print("\n[bold green]All problems done.[/bold green]")
+
+
+# ---------------------------------------------------------------------------
 # Interactive loop
 # ---------------------------------------------------------------------------
+
+
+def _print_sandbox_info(sandbox: str, n_tasks: int) -> None:
+    if sandbox in ("local", "bwrap"):
+        console.print(f"[bold]Sandbox backend:[/bold] {sandbox}")
+    else:
+        sandbox_url = os.getenv("SANDBOX_URL", "http://localhost:8080/run_code")
+        console.print(f"[bold]Sandbox URL:[/bold] {sandbox_url}")
+    console.print(f"[bold]Tasks loaded:[/bold] {n_tasks}")
+
 
 async def interactive_loop(
     tasks: list[Task],
@@ -384,10 +424,9 @@ async def interactive_loop(
     temperature: float = 0.7,
     max_tokens: int = 4096,
     n: int = 1,
+    sandbox: str = "sandboxfusion",
 ) -> None:
-    sandbox_url = os.getenv("SANDBOX_URL", "http://localhost:8080/run_code")
-    console.print(f"[bold]Sandbox URL:[/bold] {sandbox_url}")
-    console.print(f"[bold]Tasks loaded:[/bold] {len(tasks)}")
+    _print_sandbox_info(sandbox, len(tasks))
     gen_hint = " [bold yellow]g[/bold yellow]enerate |" if sampling_client else ""
     console.print(f"Commands:{gen_hint} [bold yellow]n[/bold yellow]ext | [bold yellow]q[/bold yellow]uit | Enter to submit code\n")
 
@@ -411,7 +450,7 @@ async def interactive_loop(
                 assert renderer is not None and tokenizer is not None
                 await _handle_generate(
                     task, sampling_client, renderer, tokenizer,
-                    temperature, max_tokens, n=n,
+                    temperature, max_tokens, n=n, sandbox=sandbox,
                 )
                 continue
 
@@ -459,10 +498,26 @@ def main() -> None:
     parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature for [g]enerate")
     parser.add_argument("--max-tokens", type=int, default=4096, help="Max generation tokens for [g]enerate")
     parser.add_argument("-n", type=int, default=1, help="Number of samples per generation (grouped rollout)")
+    parser.add_argument(
+        "--generate", action="store_true",
+        help="Non-interactive: run generation for all loaded tasks and exit. "
+             "Requires --model.  NOTE: consumes Tinker API tokens.",
+    )
+    parser.add_argument(
+        "--sandbox", default="sandboxfusion",
+        choices=["sandboxfusion", "local", "bwrap"],
+        help="Sandbox backend for code grading. "
+             "'local' and 'bwrap' do not require Docker. "
+             "'bwrap' requires bubblewrap in PATH.",
+    )
     args = parser.parse_args()
 
     if args.sandbox_url:
         os.environ["SANDBOX_URL"] = args.sandbox_url
+
+    if args.generate and not args.model:
+        console.print("[red]--generate requires --model.[/red]")
+        sys.exit(1)
 
     sampling_client: tinker.SamplingClient | None = None
     renderer: renderers.Renderer | None = None
@@ -477,18 +532,31 @@ def main() -> None:
     console.print(f"[bold]Loading {args.n_tasks} tasks from '{args.split}' split...[/bold]")
     tasks = load_tasks(args.n_tasks, split=args.split, seed=args.seed)
     if not tasks:
-        console.print("[red]No tasks loaded. Check dataset availability.[/red]", stderr=True)
+        console.print("[red]No tasks loaded. Check dataset availability.[/red]")
         sys.exit(1)
 
-    asyncio.run(interactive_loop(
-        tasks,
-        sampling_client=sampling_client,
-        renderer=renderer,
-        tokenizer=tokenizer,
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
-        n=args.n,
-    ))
+    if args.generate:
+        asyncio.run(generate_mode(
+            tasks,
+            sampling_client=sampling_client,
+            renderer=renderer,
+            tokenizer=tokenizer,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            n=args.n,
+            sandbox=args.sandbox,
+        ))
+    else:
+        asyncio.run(interactive_loop(
+            tasks,
+            sampling_client=sampling_client,
+            renderer=renderer,
+            tokenizer=tokenizer,
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
+            n=args.n,
+            sandbox=args.sandbox,
+        ))
 
 
 if __name__ == "__main__":

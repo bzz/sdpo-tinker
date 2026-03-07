@@ -18,15 +18,36 @@
 
 - `tinker_cookbook.renderers` / `tokenizer_utils` -- model-family-specific prompt rendering + tokenizers.
 - `tinker_cookbook.recipes.code_rl.code_env` -- dataset loading (`_load_deepcoder_split`), problem construction (`_build_question`), test normalisation.
-- `tinker_cookbook.recipes.code_rl.code_grading` -- code extraction from model output (`extract_code_from_model`) and sandbox grading (`sandbox_check_correctness`).
+- `tinker_cookbook.recipes.code_rl.code_grading` -- code extraction from model output (`extract_code_from_model`); `sandbox_check_correctness` and `postprocess_lcb_sample` used by `sandbox.py`.
 - `tinker_cookbook.completers` -- `TinkerTokenCompleter` (standard policy used for rollouts).
 - `tinker_cookbook.rl.types` -- `Env`, `EnvGroupBuilder`, `RLDataset`, `RLDatasetBuilder`, `StepResult` (with `logs` field).
 - `tinker_cookbook.rl.rollouts` -- `do_single_rollout`, `do_group_rollout`.
 
 ## Runtime prerequisites
 
-- Docker sandbox: `docker run -it -p 8080:8080 volcengine/sandbox-fusion:server-20250609`
-- Set `SANDBOX_URL=http://localhost:8080/run_code` (or pass `--sandbox-url`).
+- Docker sandbox (default): `docker run -it -p 8080:8080 volcengine/sandbox-fusion:server-20250609`, then `export SANDBOX_URL=http://localhost:8080/run_code`.
+- **local** sandbox (`--sandbox local`): no prerequisites; runs code as a plain subprocess. No isolation — only use with trusted code.
+- **bwrap** sandbox (`--sandbox bwrap`): requires `bwrap` ≥ 0.4 in PATH (`apt install bubblewrap` / `dnf install bubblewrap`). Provides unprivileged Linux namespace isolation (no network, read-only host fs) without Docker.
+
+## Token cost
+
+Every call to `_handle_generate` (interactive `[g]` command **or** `--generate` mode) sends requests to the Tinker API and consumes real tokens.  Keep `--n-tasks` and `-n` small when running for validation purposes.
+
+## Validating changes non-interactively
+
+`play_w_code_env.py` supports a `--generate` flag that runs the full generation + grading flow for all loaded tasks without any interactive prompts, then exits.  Use this to smoke-test changes without manually driving the TUI:
+
+```bash
+# Local sandbox — no Docker required; ~2 tasks × 2 samples
+python play_w_code_env.py --n-tasks 2 --model Qwen/Qwen3-8B -n 2 --seed 44 \
+    --generate --sandbox local
+
+# Bubblewrap sandbox — unprivileged isolation, no Docker
+python play_w_code_env.py --n-tasks 2 --model Qwen/Qwen3-8B -n 2 --seed 44 \
+    --generate --sandbox bwrap
+```
+
+The Rich output is identical to the interactive `[g]enerate` flow: rollout panels, grading summary, and (on failures) teacher logprob visualisation.
 
 ## env.py architecture
 
