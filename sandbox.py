@@ -58,6 +58,7 @@ async def _run_in_tmpdir(
             cwd=tmpdir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env={},
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=total_timeout)
