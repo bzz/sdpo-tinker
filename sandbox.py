@@ -24,8 +24,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import re
 import shutil
 import sys
 import tempfile
@@ -38,24 +36,6 @@ from tinker_cookbook.recipes.code_rl.code_grading import (
 )
 from tinker_cookbook.recipes.code_rl.lcb_utils import TEST_CODE, TEST_UTIL
 from tinker_cookbook.sandbox import SandboxBackend
-
-
-# Variables matching these patterns are stripped from the subprocess environment
-# to prevent leaking secrets (API keys, tokens, etc.) to untrusted graded code.
-_SENSITIVE_ENV_RE = re.compile(
-    r"(TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|API|SANDBOX_URL)",
-    re.IGNORECASE,
-)
-
-
-def _safe_env() -> dict[str, str]:
-    """Return the current environment with sensitive variables removed.
-
-    Strips any variable whose name matches common secret patterns so that
-    neither ``local`` nor ``bwrap`` subprocesses inherit API keys or tokens
-    from the parent process.
-    """
-    return {k: v for k, v in os.environ.items() if not _SENSITIVE_ENV_RE.search(k)}
 
 
 async def _run_in_tmpdir(
@@ -78,7 +58,7 @@ async def _run_in_tmpdir(
             cwd=tmpdir,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=_safe_env(),
+            env={},
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=total_timeout)
