@@ -473,7 +473,7 @@ async def interactive_loop(
                 console=console,
             ) as progress:
                 progress.add_task(f"Grading ({len(task.tests)} test cases)...", total=None)
-                passed, details = await grade(task, code)
+                passed, details = await grade(task, code, backend=sandbox)
 
             if passed:
                 console.print("[green bold]PASSED -- all tests correct![/green bold]")
