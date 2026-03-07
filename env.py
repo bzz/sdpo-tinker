@@ -425,6 +425,7 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
     group_size: int
     renderer_name: str | None = None
     timeout: int = 6
+    backend: str = "sandboxfusion"  # sandboxfusion | local | bwrap (matches play_w_code_env.py --sandbox)
     seed: int = 42
 
     async def __call__(self) -> tuple[RLDataset, RLDataset | None]:
@@ -436,6 +437,7 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
                 renderer_name=self.renderer_name,
                 group_size=self.group_size,
                 timeout=self.timeout,
+                backend=self.backend,
             )
             for task in train_tasks
         ]
@@ -449,6 +451,7 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
                 renderer_name=self.renderer_name,
                 group_size=1,
                 timeout=self.timeout,
+                backend=self.backend,
             )
             for task in test_tasks
         ]

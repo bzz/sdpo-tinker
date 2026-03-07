@@ -1,19 +1,20 @@
 """
-On-policy distillation from in-context feedback for LiveCodeBenchV5.
+On-policy distillation from in-context feedback for LiveCodeBench (SDPO).
 
 This script implements on-policy distillation where a student model learns from
-itself prompted with additionla feedback from environment by minimizing KL divergence.
-No correctness or format rewards are used - only KL penalty provides supervision.
+itself prompted with execution feedback by minimizing KL divergence against a
+fixed reference teacher.  No correctness or format rewards are used -- only KL
+penalty provides supervision.
 
 Example usage:
-    # For reasoning tasks (DeepMath)
-    python -m tinker_cookbook.recipes.distillation.on_policy_distillation \
+    python sdpo_on_policy_distillation.py \
         model_name=Qwen/Qwen3-8B \
-        dataset=lcb \
-        learning_rate=1e-4 \
-        groups_per_batch=1024 \
-        lora_rank=128 \
-        wandb_project=sdpo_lcb_distillation
+        group_size=8 \
+        groups_per_batch=8 \
+        learning_rate=1e-6 \
+        lora_rank=32 \
+        max_step=50 \
+        wandb_project=sdpo_code
 """
 
 import asyncio
@@ -27,11 +28,11 @@ from tinker.types import LossFnType
 from tinker_cookbook import checkpoint_utils, cli_utils
 from tinker_cookbook.distillation.datasets import (
     DistillationDatasetConfig,
-    PromptOnlyDatasetBuilder,
     TeacherConfig,
 )
 
 import train_on_policy
+from env import SDPOCodeDatasetBuilder
 
 
 logger = logging.getLogger(__name__)
@@ -50,9 +51,6 @@ class CLIConfig:
     # Teacher configuration
     teacher_model: str = "Qwen/Qwen3-8B"
     teacher_checkpoint: str | None = None
-
-    # Dataset configuration
-    dataset: str = "lcb"
 
     # Training hyperparameters
     group_size: int = 4  # Number of rollouts per prompt
@@ -80,6 +78,10 @@ class CLIConfig:
     # Evaluation and checkpointing
     eval_every: int = 20
     save_every: int = 20
+    max_step: int | None = None
+
+    # Sandbox backend for code execution; matches play_w_code_env.py --sandbox
+    sandbox_backend: str = "sandboxfusion"  # sandboxfusion | local | bwrap
 
     # Service configuration
     base_url: str | None = None
@@ -104,7 +106,7 @@ async def cli_main(cli_config: CLIConfig):
     else:
         model_name = cli_config.model_name.replace("/", "-")
         run_name = (
-            f"distill-{cli_config.dataset}-{model_name}-"
+            f"sdpo-code-{model_name}-"
             f"{cli_config.lora_rank}rank-{cli_config.learning_rate}lr-"
             f"{cli_config.groups_per_batch}batch-{datetime.now().strftime('%Y-%m-%d-%H-%M')}"
         )
@@ -116,13 +118,14 @@ async def cli_main(cli_config: CLIConfig):
     else:
         wandb_name = os.path.basename(log_path)
 
-    # Create dataset builder
-    dataset_builder = PromptOnlyDatasetBuilder(
-        dataset_name=cli_config.dataset,
-        groups_per_batch=cli_config.groups_per_batch,
-        group_size=cli_config.group_size,
+    # SDPO code env: DeepCoder problems graded via sandbox, feedback fed to teacher.
+    # batch_size must equal groups_per_batch for CompositeDataset alignment.
+    dataset_builder = SDPOCodeDatasetBuilder(
         model_name_for_tokenizer=cli_config.model_name,
+        batch_size=cli_config.groups_per_batch,
+        group_size=cli_config.group_size,
         renderer_name=renderer_name,
+        backend=cli_config.sandbox_backend,
     )
 
     # Create teacher config
@@ -159,6 +162,7 @@ async def cli_main(cli_config: CLIConfig):
         compute_post_kl=cli_config.compute_post_kl,
         eval_every=cli_config.eval_every,
         save_every=cli_config.save_every,
+        max_step=cli_config.max_step,
     )
 
     cli_utils.check_log_dir(log_path, behavior_if_exists=cli_config.behavior_if_log_dir_exists)
