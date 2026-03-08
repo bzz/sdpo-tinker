@@ -80,6 +80,13 @@ class CLIConfig:
     save_every: int = 20
     max_step: int | None = None
     n_tasks: int | None = None
+    max_eval_tasks: int | None = None
+
+    # Dataset selection: None (all DeepCoder), "lcbv5", "lcbv6", "codeforces"
+    dataset_name: str | None = None
+
+    # If True, run evaluators once on the test set and exit without training.
+    eval_only: bool = False
 
     # Sandbox backend for code execution; matches play_w_code_env.py --sandbox
     sandbox_backend: str = "sandboxfusion"  # sandboxfusion | local | bwrap
@@ -128,6 +135,8 @@ async def cli_main(cli_config: CLIConfig):
         renderer_name=renderer_name,
         backend=cli_config.sandbox_backend,
         n_tasks=cli_config.n_tasks,
+        n_eval_tasks=cli_config.max_eval_tasks,
+        dataset_name=cli_config.dataset_name,
     )
 
     # Create teacher config
@@ -165,6 +174,7 @@ async def cli_main(cli_config: CLIConfig):
         eval_every=cli_config.eval_every,
         save_every=cli_config.save_every,
         max_step=cli_config.max_step,
+        eval_only=cli_config.eval_only,
     )
 
     cli_utils.check_log_dir(log_path, behavior_if_exists=cli_config.behavior_if_log_dir_exists)

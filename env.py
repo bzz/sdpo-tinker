@@ -20,13 +20,15 @@ Prerequisites:
 from __future__ import annotations
 
 import ast
+import json
 import logging
 import math
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence, cast
 
 import chz
 import tinker
+from datasets import Dataset, concatenate_datasets, load_dataset
 from tinker_cookbook import renderers, tokenizer_utils
 from tinker_cookbook.completers import StopCondition
 from tinker_cookbook.recipes.code_rl.code_env import (
@@ -35,6 +37,7 @@ from tinker_cookbook.recipes.code_rl.code_env import (
     _load_deepcoder_split,
     _normalize_tests,
 )
+from tinker_cookbook.recipes.code_rl.lcb_utils import fetch_live_code_bench_system_prompt
 from tinker_cookbook.recipes.code_rl.code_grading import extract_code_from_model
 from tinker_cookbook.rl.types import (
     Action,
@@ -93,12 +96,27 @@ class Task:
     starter_code: str | None
 
 
-def load_tasks(n: int | None = None, split: str = "test", seed: int = 42) -> list[Task]:
-    """Load DeepCoder tasks, optionally capped at *n* problems."""
-    ds = _load_deepcoder_split(split)  # type: ignore[arg-type]
-    if split == "train":
-        ds = ds.shuffle(seed=seed)
+_DEEPCODER_SUBSETS: dict[str, dict[str, tuple[str, ...]]] = {
+    "train": {"default": ("primeintellect", "taco", "lcbv5"), "lcbv5": ("lcbv5",), "codeforces": ()},
+    "test": {"default": ("codeforces", "lcbv5"), "lcbv5": ("lcbv5",), "codeforces": ("codeforces",)},
+}
 
+
+def _load_deepcoder_subset(
+    names: tuple[str, ...],
+    split: Literal["train", "test"],
+) -> Dataset:
+    """Load and concatenate specific DeepCoder sub-datasets."""
+    datasets = []
+    for name in names:
+        logger.info(f"  Loading {name} ({split})...")
+        ds = load_dataset("agentica-org/DeepCoder-Preview-Dataset", name=name, split=split)
+        datasets.append(cast(Dataset, ds))
+    return cast(Dataset, concatenate_datasets(datasets))
+
+
+def _tasks_from_deepcoder_ds(ds: Dataset, n: int | None = None) -> list[Task]:
+    """Convert a HuggingFace Dataset of DeepCoder rows into Task objects."""
     tasks: list[Task] = []
     for row in ds:
         if n is not None and len(tasks) >= n:
@@ -116,6 +134,64 @@ def load_tasks(n: int | None = None, split: str = "test", seed: int = 42) -> lis
             starter = None
         tasks.append(Task(problem=question, tests=tests, starter_code=starter))
     return tasks
+
+
+def _load_lcbv6_tasks(
+    split: Literal["train", "test"],
+    n: int | None = None,
+) -> list[Task]:
+    """Load tasks from the bzz2/live_code_bench_v6_lite_sdpo dataset."""
+    logger.info("Loading lcbv6 (%s)...", split)
+    ds = load_dataset("bzz2/live_code_bench_v6_lite_sdpo", "parquet", split=split)
+
+    tasks: list[Task] = []
+    for row in cast(Dataset, ds):
+        if n is not None and len(tasks) >= n:
+            break
+        example: dict[str, Any] = row  # type: ignore[assignment]
+        gt = json.loads(example["reward_model"]["ground_truth"])
+        tests = _normalize_tests(gt, {})
+        if not tests:
+            continue
+        description = example["extra_info"]["description"]
+        question = fetch_live_code_bench_system_prompt(description)
+        tasks.append(Task(problem=question, tests=tests, starter_code=None))
+    return tasks
+
+
+def load_tasks(
+    n: int | None = None,
+    split: str = "test",
+    seed: int = 42,
+    dataset_name: str | None = None,
+) -> list[Task]:
+    """Load coding tasks, optionally capped at *n* problems.
+
+    Args:
+        dataset_name: None for all DeepCoder sub-datasets, or one of
+            "lcbv5", "codeforces", "lcbv6".
+    """
+    if dataset_name == "lcbv6":
+        return _load_lcbv6_tasks(split, n)  # type: ignore[arg-type]
+
+    if dataset_name is not None:
+        split_map = _DEEPCODER_SUBSETS.get(split, {})
+        names = split_map.get(dataset_name)
+        if names is None or len(names) == 0:
+            logger.info("No %s split for dataset_name=%s, returning empty task list", split, dataset_name)
+            return []
+    else:
+        names = None  # use _load_deepcoder_split (loads all)
+
+    if names is not None:
+        ds = _load_deepcoder_subset(names, split)  # type: ignore[arg-type]
+    else:
+        ds = _load_deepcoder_split(split)  # type: ignore[arg-type]
+
+    if split == "train":
+        ds = ds.shuffle(seed=seed)
+
+    return _tasks_from_deepcoder_ds(ds, n)
 
 
 
@@ -408,7 +484,7 @@ class SDPOCodeDataset(RLDataset):
 
 @chz.chz
 class SDPOCodeDatasetBuilder(RLDatasetBuilder):
-    """Build RL datasets over DeepCoder tasks for SDPO training."""
+    """Build RL datasets over coding tasks for SDPO training."""
 
     model_name_for_tokenizer: str
     batch_size: int
@@ -417,10 +493,12 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
     timeout: int = 6
     backend: str = "sandboxfusion"
     n_tasks: int | None = None
+    n_eval_tasks: int | None = None
+    dataset_name: str | None = None
     seed: int = 42
 
     async def __call__(self) -> tuple[RLDataset, RLDataset | None]:
-        train_tasks = load_tasks(split="train", seed=self.seed)
+        train_tasks = load_tasks(split="train", seed=self.seed, dataset_name=self.dataset_name)
         if self.n_tasks is not None:
             train_tasks = train_tasks[:self.n_tasks]
         train_builders = [
@@ -436,7 +514,9 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
         ]
         train_dataset = SDPOCodeDataset(builders=train_builders, batch_size=self.batch_size)
 
-        test_tasks = load_tasks(split="test", seed=self.seed)
+        test_tasks = load_tasks(split="test", seed=self.seed, dataset_name=self.dataset_name)
+        if self.n_eval_tasks is not None:
+            test_tasks = test_tasks[:self.n_eval_tasks]
         test_builders = [
             SDPOCodeGroupBuilder(
                 task=task,

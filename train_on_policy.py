@@ -246,6 +246,9 @@ class Config:
     # Maximum number of training steps. If None, train on the full dataset.
     max_step: int | None = None
 
+    # If True, run evaluators once and exit without training.
+    eval_only: bool = False
+
 
 @scope
 async def prepare_minibatch(
@@ -398,6 +401,8 @@ async def do_sync_training(
         if cfg.eval_every > 0 and i_batch % cfg.eval_every == 0:
             with timed("run_evals", metrics):
                 for evaluator in evaluators:
+                    if hasattr(evaluator, "env_group_builders_P"):
+                        logger.info(f"Evaluating on {len(evaluator.env_group_builders_P)} tasks")
                     eval_metrics = await evaluator(sampling_client)
                     metrics.update({f"test/{k}": v for k, v in eval_metrics.items()})
 
@@ -453,11 +458,18 @@ async def main(
     cfg: Config,
 ):
     """Main training loop for on-policy distillation."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s:%(lineno)d [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+        force=True,
+    )
     ml_logger = ml_log.setup_logging(
         log_dir=cfg.log_path,
         wandb_project=cfg.wandb_project,
         config=cfg,
         wandb_name=cfg.wandb_name,
+        do_configure_logging_module=False,
     )
     if cfg.enable_trace:
         # Get and rename the current (main) task
@@ -536,6 +548,27 @@ async def main(
             f"Created teacher sampling client for {teacher_config.base_model} "
             f"(checkpoint: {teacher_config.load_checkpoint_path})"
         )
+
+    # Eval-only mode: run evaluators once then exit.
+    if cfg.eval_only:
+        sampling_client = (
+            service_client.create_sampling_client(
+                base_model=cfg.model_name, model_path=load_state_path,
+            )
+            if load_state_path
+            else service_client.create_sampling_client(base_model=cfg.model_name)
+        )
+        metrics: dict[str, Any] = {}
+        with timed("run_evals", metrics):
+            for evaluator in evaluators:
+                if hasattr(evaluator, "env_group_builders_P"):
+                    logger.info(f"Evaluating on {len(evaluator.env_group_builders_P)} tasks")
+                eval_metrics = await evaluator(sampling_client)
+                metrics.update({f"test/{k}": v for k, v in eval_metrics.items()})
+        ml_logger.log_metrics(metrics, step=0)
+        ml_logger.close()
+        logger.info("Eval-only run completed")
+        return
 
     # Wrap datasets in CompositeDataset
     composite_dataset = CompositeDataset(datasets, groups_per_batch_list)
