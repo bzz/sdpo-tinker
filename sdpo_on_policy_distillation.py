@@ -79,6 +79,7 @@ class CLIConfig:
     eval_every: int = 20
     save_every: int = 20
     max_step: int | None = None
+    n_tasks: int | None = None
 
     # Sandbox backend for code execution; matches play_w_code_env.py --sandbox
     sandbox_backend: str = "sandboxfusion"  # sandboxfusion | local | bwrap
@@ -126,6 +127,7 @@ async def cli_main(cli_config: CLIConfig):
         group_size=cli_config.group_size,
         renderer_name=renderer_name,
         backend=cli_config.sandbox_backend,
+        n_tasks=cli_config.n_tasks,
     )
 
     # Create teacher config

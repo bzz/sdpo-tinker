@@ -539,9 +539,11 @@ async def main(
 
     # Wrap datasets in CompositeDataset
     composite_dataset = CompositeDataset(datasets, groups_per_batch_list)
-    num_batches = len(composite_dataset)
-    num_batches = min(cfg.max_step, num_batches) if cfg.max_step is not None else num_batches
-    logger.info(f"Will train on {num_batches} batches (dataset has {num_batches})")
+    dataset_len = len(composite_dataset)
+    # Use max_step directly (not min) so it can *exceed* the dataset length,
+    # enabling wrap-around for overfit runs (e.g. n_tasks=2, max_step=20).
+    num_batches = cfg.max_step if cfg.max_step is not None else dataset_len
+    logger.info(f"Will train on {num_batches} batches (dataset has {dataset_len})")
 
     # Training loop
     await do_sync_training(

@@ -3,7 +3,6 @@ Reusable SDPO code environment for LiveCodeBench tasks.
 
 Provides:
 - Task dataclass and load_tasks() for loading DeepCoder problems
-- grade() for sandbox-based test execution
 - Prompt templates for SDPO teacher/student flows
 - format_feedback() for converting sandbox results to LeetCode-style feedback
 - SDPOCodeEnv (Env subclass) for use with tinker-cookbook RL rollouts
@@ -37,8 +36,6 @@ from tinker_cookbook.recipes.code_rl.code_env import (
     _normalize_tests,
 )
 from tinker_cookbook.recipes.code_rl.code_grading import extract_code_from_model
-
-from sandbox import grade_code
 from tinker_cookbook.rl.types import (
     Action,
     Env,
@@ -50,6 +47,8 @@ from tinker_cookbook.rl.types import (
     StepResult,
     Trajectory,
 )
+
+import sandbox
 
 logger = logging.getLogger(__name__)
 
@@ -118,16 +117,6 @@ def load_tasks(n: int | None = None, split: str = "test", seed: int = 42) -> lis
         tasks.append(Task(problem=question, tests=tests, starter_code=starter))
     return tasks
 
-
-# ---------------------------------------------------------------------------
-# Grading
-# ---------------------------------------------------------------------------
-
-
-async def grade(
-    task: Task, code: str, timeout: int = 6, backend: str = "sandboxfusion"
-) -> tuple[bool, dict[str, Any]]:
-    return await grade_code(task.tests, code, timeout=timeout, backend=backend)
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +259,7 @@ class SDPOCodeEnv(Env):
         self.passed = False
         self.feedback = ""
         if self.code is not None:
-            passed, details = await grade(self.task, self.code, timeout=self.timeout, backend=self.backend)
+            passed, details = await sandbox.grade_code(self.task.tests, self.code, timeout=self.timeout, backend=self.backend)
             self.passed = passed
             if not passed:
                 self.feedback = format_feedback(details)
@@ -408,6 +397,7 @@ class SDPOCodeDataset(RLDataset):
         self.batch_size = batch_size
 
     def get_batch(self, index: int) -> Sequence[EnvGroupBuilder]:
+        index = index % len(self)
         start = index * self.batch_size
         end = start + self.batch_size
         return self.builders[start:end]
@@ -425,11 +415,14 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
     group_size: int
     renderer_name: str | None = None
     timeout: int = 6
-    backend: str = "sandboxfusion"  # sandboxfusion | local | bwrap (matches play_w_code_env.py --sandbox)
+    backend: str = "sandboxfusion"
+    n_tasks: int | None = None
     seed: int = 42
 
     async def __call__(self) -> tuple[RLDataset, RLDataset | None]:
         train_tasks = load_tasks(split="train", seed=self.seed)
+        if self.n_tasks is not None:
+            train_tasks = train_tasks[:self.n_tasks]
         train_builders = [
             SDPOCodeGroupBuilder(
                 task=task,

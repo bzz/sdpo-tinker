@@ -51,9 +51,9 @@ from env import (
     Task,
     _parse_stdout,
     build_sdpo_teacher_inputs,
-    grade,
     load_tasks,
 )
+import sandbox
 
 console = Console()
 
@@ -424,9 +424,9 @@ async def interactive_loop(
     temperature: float = 0.7,
     max_tokens: int = 4096,
     n: int = 1,
-    sandbox: str = "sandboxfusion",
+    sandbox_name: str = "sandboxfusion",
 ) -> None:
-    _print_sandbox_info(sandbox, len(tasks))
+    _print_sandbox_info(sandbox_name, len(tasks))
     gen_hint = " [bold yellow]g[/bold yellow]enerate |" if sampling_client else ""
     console.print(f"Commands:{gen_hint} [bold yellow]n[/bold yellow]ext | [bold yellow]q[/bold yellow]uit | Enter to submit code\n")
 
@@ -450,7 +450,7 @@ async def interactive_loop(
                 assert renderer is not None and tokenizer is not None
                 await _handle_generate(
                     task, sampling_client, renderer, tokenizer,
-                    temperature, max_tokens, n=n, sandbox=sandbox,
+                    temperature, max_tokens, n=n, sandbox=sandbox_name,
                 )
                 continue
 
@@ -473,7 +473,7 @@ async def interactive_loop(
                 console=console,
             ) as progress:
                 progress.add_task(f"Grading ({len(task.tests)} test cases)...", total=None)
-                passed, details = await grade(task, code, backend=sandbox)
+                passed, details = await sandbox_name.grade_code(task.tests, code, backend=sandbox_name)
 
             if passed:
                 console.print("[green bold]PASSED -- all tests correct![/green bold]")
@@ -555,7 +555,7 @@ def main() -> None:
             temperature=args.temperature,
             max_tokens=args.max_tokens,
             n=args.n,
-            sandbox=args.sandbox,
+            sandbox_name=args.sandbox,
         ))
 
 
