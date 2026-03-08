@@ -30,6 +30,7 @@ import chz
 import tinker
 from datasets import Dataset, concatenate_datasets, load_dataset
 from tinker_cookbook import renderers, tokenizer_utils
+from tinker_cookbook.utils.misc_utils import timed
 from tinker_cookbook.completers import StopCondition
 from tinker_cookbook.recipes.code_rl.code_env import (
     _build_question,
@@ -50,8 +51,6 @@ from tinker_cookbook.rl.types import (
     StepResult,
     Trajectory,
 )
-
-import time
 
 import sandbox
 
@@ -336,27 +335,24 @@ class SDPOCodeEnv(Env):
 
         self.passed = False
         self.feedback = ""
-        grade_time_s = 0.0
+        metrics: dict[str, Any] = {}
         if self.code is not None:
-            t0 = time.monotonic()
-            passed, details = await sandbox.grade_code(self.task.tests, self.code, timeout=self.timeout, backend=self.backend)
-            grade_time_s = time.monotonic() - t0
+            with timed("grade", metrics):
+                passed, details = await sandbox.grade_code(self.task.tests, self.code, timeout=self.timeout, backend=self.backend)
             self.passed = passed
             if not passed:
                 self.feedback = format_feedback(details)
         else:
             self.feedback = "No code block found in response."
+        metrics["correct"] = float(self.passed)
+        metrics["has_code"] = float(self.code is not None)
 
         return StepResult(
             reward=0.0,
             episode_done=True,
             next_observation=tinker.ModelInput.empty(),
             next_stop_condition=self.stop_condition,
-            metrics={
-                "correct": float(self.passed),
-                "has_code": float(self.code is not None),
-                "grade_time_s": grade_time_s,
-            },
+            metrics=metrics,
             logs={
                 "feedback": self.feedback,
             },
