@@ -80,6 +80,8 @@ python sdpo_on_policy_distillation.py \
 
 **Total wall-clock time**: ~376.6 seconds (~6.3 minutes)
 
+**Note on timing granularity**: The `sample` and `eval` timers include both Tinker API inference (token generation) **and** local sandbox grading (code execution via subprocess). This run predates the `grade_time_s` metric added to `env.py`, which will break these apart in future runs. The `train` timer covers the Tinker optimizer forward/backward pass. The `KL penalty compute` timer covers the teacher logprob forward pass (prefill-only, no sampling).
+
 ## 3. Analysis
 
 ### 3.1 KL Divergence Trends
@@ -145,14 +147,16 @@ With only 4 training tasks, overfitting is guaranteed with enough steps. In 2 st
 
 ## 5. Cost Estimate
 
-### 5.1 Per-Token Pricing (Qwen3-4B-Instruct via Alibaba Cloud API)
+### 5.1 Tinker API Pricing (Qwen3-4B-Instruct-2507)
 
-| | Price |
-|---|---|
-| Input tokens | $0.11 / 1M tokens |
-| Output tokens | $0.42 / 1M tokens |
+| Operation | Price |
+|-----------|-------|
+| Prefill (prompt/input tokens) | $0.07 / 1M tokens |
+| Sample (generation/output tokens) | $0.22 / 1M tokens |
+| Train (optimizer token processing) | $0.22 / 1M tokens |
+| Storage | $0.10 / GB-month |
 
-Source: [Alibaba Cloud Model Studio pricing](https://www.alibabacloud.com/help/en/model-studio/model-pricing), [Artificial Analysis](https://artificialanalysis.ai/models/qwen3-4b-instruct)
+Source: [Tinker pricing](https://thinkingmachines.ai/tinker/)
 
 ### 5.2 Token Usage from Logs
 
@@ -164,20 +168,22 @@ Source: [Alibaba Cloud Model Studio pricing](https://www.alibabacloud.com/help/e
 | **Eval prompts (input)** | Step 0: 3,264 + Step 1: 3,264 = **6,528** |
 | **Teacher KL logprob calls (input)** | ~28,994 (reprocesses student output tokens) |
 | **Teacher KL prompts (input)** | ~5,868 (feedback-conditioned prompts) |
-| **Total input tokens** | ~47,258 |
-| **Total output tokens** | ~54,577 |
+| **Total prefill tokens** | ~47,258 |
+| **Total sample tokens** | ~54,577 |
+| **Total train tokens** | ~28,994 (optimizer processes train rollouts) |
 
-### 5.3 Estimated API Cost
+### 5.3 Estimated Tinker API Cost
 
-| | Tokens | Rate | Cost |
+| Operation | Tokens | Rate | Cost |
 |---|---|---|---|
-| Input | 47,258 | $0.11/1M | $0.0052 |
-| Output | 54,577 | $0.42/1M | $0.0229 |
-| **Total** | | | **$0.0281** |
+| Prefill | 47,258 | $0.07/1M | $0.0033 |
+| Sample | 54,577 | $0.22/1M | $0.0120 |
+| Train | 28,994 | $0.22/1M | $0.0064 |
+| **Total** | | | **$0.022** |
 
-**Note**: This is the equivalent API cost if using Alibaba Cloud's pricing for Qwen3-4B. The actual cost depends on the Tinker service pricing, which may differ (GPU time, hosting costs, etc.). The Tinker API handles model serving, LoRA training, and checkpoint management — the real cost is dominated by GPU compute time for the ~6.3 minutes of wall-clock time.
+This is the actual Tinker API cost for this experiment. Tinker handles model serving, LoRA training, and checkpoint management — pricing is purely per-token with no separate GPU/hour charges.
 
-As a rough GPU cost estimate: at ~$1/hr for an A10G or similar GPU capable of running a 4B model with LoRA, 6.3 minutes ≈ **$0.11** in raw compute.
+**Note**: The teacher KL token estimates above are approximate (assumed equal to student tokens). Future runs will log exact counts via the new `teacher_kl_prefill_tokens` and `train_total_tokens` / `train_action_tokens` metrics added to the training loop.
 
 ## 6. Observations and Recommendations
 

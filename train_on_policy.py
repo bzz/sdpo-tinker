@@ -199,8 +199,16 @@ async def incorporate_kl_penalty(
         sum([mask.sum() for mask in float_masks]).item(), 1e-8
     )
 
+    # Count teacher KL prefill tokens (total tokens sent for logprob forward passes)
+    teacher_kl_prefill_tokens = sum(
+        ti.length for ti in teacher_inputs_D if ti is not None
+    )
+
     # Compute per-dataset metrics
-    metrics = {"teacher_kl": float(avg_logp_diff)}
+    metrics = {
+        "teacher_kl": float(avg_logp_diff),
+        "teacher_kl_prefill_tokens": teacher_kl_prefill_tokens,
+    }
     for dataset_idx, (kl_sum, mask_sum) in per_dataset_kl.items():
         if mask_sum > 0:
             metrics[f"teacher_kl/dataset_{dataset_idx}"] = float(kl_sum / mask_sum)
@@ -271,6 +279,15 @@ async def prepare_minibatch(
     with timed("assemble_training_data", metrics):
         advantages_P = compute_advantages(trajectory_groups_P)
         data_D, metadata_D = assemble_training_data(trajectory_groups_P, advantages_P)
+
+    # Count train tokens: total tokens in each datum and masked (action) tokens
+    # that the optimizer actually processes.
+    train_total_tokens = sum(datum.model_input.length for datum in data_D)
+    train_action_tokens = sum(
+        int(datum.loss_fn_inputs["mask"].to_torch().sum().item()) for datum in data_D
+    )
+    metrics["train_total_tokens"] = train_total_tokens
+    metrics["train_action_tokens"] = train_action_tokens
 
     # Print one datum per dataset
     printed_datasets = set()

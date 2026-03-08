@@ -51,6 +51,8 @@ from tinker_cookbook.rl.types import (
     Trajectory,
 )
 
+import time
+
 import sandbox
 
 logger = logging.getLogger(__name__)
@@ -334,8 +336,11 @@ class SDPOCodeEnv(Env):
 
         self.passed = False
         self.feedback = ""
+        grade_time_s = 0.0
         if self.code is not None:
+            t0 = time.monotonic()
             passed, details = await sandbox.grade_code(self.task.tests, self.code, timeout=self.timeout, backend=self.backend)
+            grade_time_s = time.monotonic() - t0
             self.passed = passed
             if not passed:
                 self.feedback = format_feedback(details)
@@ -350,6 +355,7 @@ class SDPOCodeEnv(Env):
             metrics={
                 "correct": float(self.passed),
                 "has_code": float(self.code is not None),
+                "grade_time_s": grade_time_s,
             },
             logs={
                 "feedback": self.feedback,
