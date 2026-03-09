@@ -124,7 +124,7 @@ async def incorporate_kl_penalty(
     dataset_indices_D: List[int],
     kl_penalty_coef: float,
     kl_discount_factor: float,
-) -> Dict[str, float]:
+) -> Dict[str, float | int]:
     """
     Compute reverse KL between the student (log p) and the teacher model (log q), computed as
     log p - log q. We then adjust the advantages in-place as the negative reverse KL.
