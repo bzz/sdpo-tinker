@@ -2319,10 +2319,9 @@ for a, t in queries:
 02:08:49 tinker_cookbook.utils.misc_utils:20 [INFO] Starting sample
 02:09:05 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
 02:09:06 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.11 seconds
-000    │
-│ env/all/time/grade             │ 6.170289    │
-│ env/all/total_ac_tokens        │ 12472       │
-│ env/all/total_episodes         │ 8           │
+02:09:07 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:09:07 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+odes         │ 8           │
 │ env/all/total_ob_tokens        │ 2912        │
 │ env/all/total_turns            │ 8           │
 │ env/all/turns_per_episode      │ 1.000000    │
