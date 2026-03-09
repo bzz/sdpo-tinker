@@ -1,0 +1,79 @@
+02:03:51 tinker_cookbook.utils.ml_log:197 [INFO] 
+Configuration:
+  learning_rate: 0.0001
+  dataset_configs: [{'dataset_builder': {'model_name_for_tokenizer': 
+'Qwen/Qwen3-4B-Instruct-2507', 'batch_size': 2, 'group_size': 4, 'renderer_nam 
+... ed': 42}, 'teacher_config': {'base_model': 'Qwen/Qwen3-4B-Instruct-2507', 
+'load_checkpoint_path': None}, 'groups_per_batch': 2}]
+  model_name: 'Qwen/Qwen3-4B-Instruct-2507'
+  renderer_name: 'qwen3_instruct'
+  max_tokens: 4096
+  temperature: 1.0
+  compute_post_kl: False
+  evaluator_builders: []
+  lora_rank: 128
+  kl_penalty_coef: 1.0
+  kl_discount_factor: 0.0
+  loss_fn: 'importance_sampling'
+  loss_fn_config: None
+  num_substeps: 1
+  wandb_project: None
+  wandb_name: 
+'sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128rank-0.0001lr-2batch-2026-03-09-02-03'
+  log_path: 
+'/root/tinker-examples/distillation/sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128ran
+k-0.0001lr-2batch-2026-03-09-02-03'
+  base_url: None
+  enable_trace: False
+  eval_every: 1
+  save_every: 20
+  load_checkpoint_path: None
+  max_step: 2
+  eval_only: False
+02:03:51 tinker_cookbook.utils.ml_log:477 [INFO] Logging to: /root/tinker-examples/distillation/sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128rank-0.0001lr-2batch-2026-03-09-02-03
+02:03:51 tinker_cookbook.checkpoint_utils:197 [INFO] No checkpoints found at /root/tinker-examples/distillation/sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128rank-0.0001lr-2batch-2026-03-09-02-03/checkpoints.jsonl
+02:03:51 tinker_cookbook.checkpoint_utils:228 [INFO] No checkpoints found with key state_path in /root/tinker-examples/distillation/sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128rank-0.0001lr-2batch-2026-03-09-02-03
+02:03:51 tinker.lib.public_interfaces.service_client:67 [INFO] ServiceClient initialized for session fe730e21-a62d-573f-ae63-a9fab347ae3b
+02:04:12 tinker.lib.public_interfaces.service_client:151 [INFO] TrainingClient initialized for model fe730e21-a62d-573f-ae63-a9fab347ae3b:train:0
+02:04:14 env:145 [INFO] Loading lcbv6 (train)...
+02:04:16 env:145 [INFO] Loading lcbv6 (test)...
+02:04:17 train_on_policy:564 [INFO] Created teacher sampling client for Qwen/Qwen3-4B-Instruct-2507 (checkpoint: None)
+02:04:17 train_on_policy:596 [INFO] Will train on 2 batches (dataset has 2)
+02:04:17 tinker_cookbook.utils.misc_utils:20 [INFO] Starting save_checkpoint
+02:04:20 tinker_cookbook.utils.misc_utils:23 [INFO] save_checkpoint took 3.37 seconds
+02:04:20 tinker_cookbook.utils.misc_utils:20 [INFO] Starting run_evals
+02:04:20 train_on_policy:422 [INFO] Evaluating on 10 tasks
+02:04:47 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:04:47 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.16 seconds
+02:04:51 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:04:51 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:04:53 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:04:53 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.21 seconds
+02:04:54 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:04:54 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:05:04 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:05:04 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.13 seconds
+02:05:07 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:05:07 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:05:08 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.20 seconds
+02:05:08 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.20 seconds
+02:05:24 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:05:24 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:05:40 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:05:40 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:05:51 tinker_cookbook.utils.misc_utils:23 [INFO] run_evals took 90.20 seconds
+02:05:51 tinker_cookbook.utils.misc_utils:20 [INFO] Starting sample
+02:06:16 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:06:16 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:06:16 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.20 seconds
+02:06:16 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.20 seconds
+02:06:18 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:06:18 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:06:22 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:06:22 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.11 seconds
+02:06:56 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:06:56 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:07:00 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:07:00 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:07:03 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:07:03 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.15 seconds
