@@ -2317,9 +2317,9 @@ for a, t in queries:
 │ train_total_tokens             │ 21087       │
 └────────────────────────────────┴─────────────┘
 02:08:49 tinker_cookbook.utils.misc_utils:20 [INFO] Starting sample
-/has_code               │ 1.000000    │
-│ env/all/ob_tokens_per_turn     │ 364.000000  │
-│ env/all/reward/total           │ 0.000000    │
+02:09:05 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:09:06 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.11 seconds
+000    │
 │ env/all/time/grade             │ 6.170289    │
 │ env/all/total_ac_tokens        │ 12472       │
 │ env/all/total_episodes         │ 8           │
@@ -3559,3 +3559,52 @@ This will correctly handle all 8 direction cases as specified.<|im_end|>
 02:08:55 tinker_cookbook.utils.misc_utils:20 [INFO] Starting build_teacher_inputs
 02:08:55 tinker_cookbook.utils.misc_utils:23 [INFO] build_teacher_inputs took 0.01 seconds
 02:08:55 tinker_cookbook.utils.misc_utils:20 [INFO] Starting compute_kl_penalty
+02:08:58 tinker_cookbook.utils.misc_utils:23 [INFO] compute_kl_penalty took 3.09 seconds
+02:08:58 tinker_cookbook.utils.misc_utils:20 [INFO] Starting train
+02:09:02 tinker_cookbook.utils.misc_utils:23 [INFO] train took 3.69 seconds
+02:09:02 tinker_cookbook.utils.misc_utils:20 [INFO] Starting compute_kl_sample_train
+02:09:02 tinker_cookbook.utils.misc_utils:23 [INFO] compute_kl_sample_train took 0.01 seconds
+02:09:02 tinker_cookbook.utils.misc_utils:20 [INFO] Starting save_checkpoint
+02:09:04 tinker_cookbook.utils.misc_utils:23 [INFO] save_checkpoint took 2.57 seconds
+02:09:04 tinker_cookbook.utils.ml_log:145 [INFO] Wrote metrics to /root/tinker-examples/distillation/sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128rank-0.0001lr-2batch-2026-03-09-01-43/metrics.jsonl
+02:09:04 tinker_cookbook.utils.ml_log:197 [INFO] 
+                    Step 11                     
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ Metric                         ┃ Value       ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ env/all/ac_tokens_per_turn     │ 2201.625000 │
+│ env/all/by_group/frac_all_bad  │ 1.000000    │
+│ env/all/by_group/frac_all_good │ 0.000000    │
+│ env/all/by_group/frac_mixed    │ 0.000000    │
+│ env/all/correct                │ 0.000000    │
+│ env/all/group_pass_rate        │ 0.000000    │
+│ env/all/has_code               │ 0.875000    │
+│ env/all/ob_tokens_per_turn     │ 364.000000  │
+│ env/all/reward/total           │ 0.000000    │
+│ env/all/time/grade             │ 6.168765    │
+│ env/all/total_ac_tokens        │ 17613       │
+│ env/all/total_episodes         │ 8           │
+│ env/all/total_ob_tokens        │ 2912        │
+│ env/all/total_turns            │ 8           │
+│ env/all/turns_per_episode      │ 1.000000    │
+│ optim/entropy                  │ 0.411102    │
+│ optim/kl_sample_train_v1       │ 0.000768    │
+│ optim/kl_sample_train_v2       │ 0.000901    │
+│ optim/lr                       │ 0.000100    │
+│ progress/batch                 │ 11          │
+│ progress/done_frac             │ 0.600000    │
+│ teacher_kl                     │ 0.004203    │
+│ teacher_kl/dataset_0           │ 0.004203    │
+│ teacher_kl_prefill_tokens      │ 20335       │
+│ time/assemble_training_data    │ 0.018452    │
+│ time/build_teacher_inputs      │ 0.008385    │
+│ time/compute_kl_penalty        │ 3.094802    │
+│ time/compute_kl_sample_train   │ 0.008415    │
+│ time/sample                    │ 90.960475   │
+│ time/save_checkpoint           │ 2.574313    │
+│ time/total                     │ 100.360523  │
+│ time/train                     │ 3.692091    │
+│ train_action_tokens            │ 17613       │
+│ train_total_tokens             │ 20517       │
+└────────────────────────────────┴─────────────┘
+02:09:04 tinker_cookbook.utils.misc_utils:20 [INFO] Starting sample

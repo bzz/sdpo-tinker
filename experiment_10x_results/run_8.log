@@ -439,3 +439,7 @@ main()
 02:08:31 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
 02:08:31 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.20 seconds
 02:08:31 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.20 seconds
+02:09:00 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:09:00 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.11 seconds
+02:09:00 tinker_cookbook.utils.misc_utils:23 [INFO] run_evals took 89.54 seconds
+02:09:00 tinker_cookbook.utils.misc_utils:20 [INFO] Starting sample
