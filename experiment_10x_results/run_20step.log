@@ -2274,71 +2274,50 @@ for a, t in queries:
 02:08:39 tinker_cookbook.utils.misc_utils:20 [INFO] Starting compute_kl_sample_train
 02:08:39 tinker_cookbook.utils.misc_utils:23 [INFO] compute_kl_sample_train took 0.00 seconds
 02:08:39 tinker_cookbook.utils.misc_utils:20 [INFO] Starting save_checkpoint
-)
-- West (W) → East (E)
-- South (S) → North (N)
-- Northeast (NE) → Southwest (SW)
-- Northwest (NW) → Southeast (SE)
-- Southeast (SE) → Northwest (NW)
-- Southwest (SW) → Northeast (NE)
-
-## Solution Approach
-
-1. Read the input string D
-2. Create a mapping from each direction to its opposite
-3. Return the opposite direction
-
-## Step-by-step Implementation
-
-```python
-# Read the input direction
-D = input().strip()
-
-# Create a dictionary mapping each direction to its opposite
-direction_opposite = {
-    "N": "S",
-    "S": "N",
-    "E": "W",
-    "W": "E",
-    "NE": "SW",
-    "NW": "SE",
-    "SE": "NW",
-    "SW": "NE"
-}
-
-# Print the opposite direction
-print(direction_opposite[D])
-```
-
-The solution works by:
-1. Reading the input string
-2. Using a dictionary to store the mapping of each direction to its opposite
-3. Looking up the opposite direction based on the input and printing it
-
-This is efficient with O(1) time complexity and handles all 8 possible directions correctly.<|im_end|>
-02:00:46 tinker_cookbook.utils.misc_utils:20 [INFO] Starting build_teacher_inputs
-02:00:46 tinker_cookbook.utils.misc_utils:23 [INFO] build_teacher_inputs took 0.01 seconds
-02:00:46 tinker_cookbook.utils.misc_utils:20 [INFO] Starting compute_kl_penalty
-02:00:48 tinker_cookbook.utils.misc_utils:23 [INFO] compute_kl_penalty took 1.51 seconds
-02:00:48 tinker_cookbook.utils.misc_utils:20 [INFO] Starting train
-02:00:53 tinker_cookbook.utils.misc_utils:23 [INFO] train took 4.99 seconds
-02:00:53 tinker_cookbook.utils.misc_utils:20 [INFO] Starting compute_kl_sample_train
-02:00:53 tinker_cookbook.utils.misc_utils:23 [INFO] compute_kl_sample_train took 0.00 seconds
-02:00:53 tinker_cookbook.utils.misc_utils:20 [INFO] Starting save_checkpoint
-02:01:00 tinker_cookbook.utils.misc_utils:23 [INFO] save_checkpoint took 7.43 seconds
-02:01:00 tinker_cookbook.utils.ml_log:145 [INFO] Wrote metrics to /root/tinker-examples/distillation/sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128rank-0.0001lr-2batch-2026-03-09-01-43/metrics.jsonl
-02:01:00 tinker_cookbook.utils.ml_log:197 [INFO] 
-                     Step 7                     
+02:08:49 tinker_cookbook.utils.misc_utils:23 [INFO] save_checkpoint took 9.27 seconds
+02:08:49 tinker_cookbook.utils.ml_log:145 [INFO] Wrote metrics to /root/tinker-examples/distillation/sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128rank-0.0001lr-2batch-2026-03-09-01-54/metrics.jsonl
+02:08:49 tinker_cookbook.utils.ml_log:197 [INFO] 
+                     Step 6                     
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
 ┃ Metric                         ┃ Value       ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
-│ env/all/ac_tokens_per_turn     │ 1559.000000 │
+│ env/all/ac_tokens_per_turn     │ 2267.375000 │
 │ env/all/by_group/frac_all_bad  │ 1.000000    │
 │ env/all/by_group/frac_all_good │ 0.000000    │
 │ env/all/by_group/frac_mixed    │ 0.000000    │
 │ env/all/correct                │ 0.000000    │
 │ env/all/group_pass_rate        │ 0.000000    │
 │ env/all/has_code               │ 1.000000    │
+│ env/all/ob_tokens_per_turn     │ 369.500000  │
+│ env/all/reward/total           │ 0.000000    │
+│ env/all/time/grade             │ 0.183417    │
+│ env/all/total_ac_tokens        │ 18139       │
+│ env/all/total_episodes         │ 8           │
+│ env/all/total_ob_tokens        │ 2956        │
+│ env/all/total_turns            │ 8           │
+│ env/all/turns_per_episode      │ 1.000000    │
+│ optim/entropy                  │ 0.386052    │
+│ optim/kl_sample_train_v1       │ 0.000727    │
+│ optim/kl_sample_train_v2       │ 0.000796    │
+│ optim/lr                       │ 0.000100    │
+│ progress/batch                 │ 6           │
+│ progress/done_frac             │ 0.350000    │
+│ teacher_kl                     │ 0.009091    │
+│ teacher_kl/dataset_0           │ 0.009091    │
+│ teacher_kl_prefill_tokens      │ 21279       │
+│ time/assemble_training_data    │ 0.018250    │
+│ time/build_teacher_inputs      │ 0.009376    │
+│ time/compute_kl_penalty        │ 5.268482    │
+│ time/compute_kl_sample_train   │ 0.002800    │
+│ time/sample                    │ 70.494126   │
+│ time/save_checkpoint           │ 9.271809    │
+│ time/total                     │ 89.938776   │
+│ time/train                     │ 4.868155    │
+│ train_action_tokens            │ 18139       │
+│ train_total_tokens             │ 21087       │
+└────────────────────────────────┴─────────────┘
+02:08:49 tinker_cookbook.utils.misc_utils:20 [INFO] Starting sample
+/has_code               │ 1.000000    │
 │ env/all/ob_tokens_per_turn     │ 364.000000  │
 │ env/all/reward/total           │ 0.000000    │
 │ env/all/time/grade             │ 6.170289    │
@@ -3485,3 +3464,98 @@ solve()
 02:08:02 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 6.13 seconds
 02:08:45 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
 02:08:45 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:08:49 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:08:51 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 6.21 seconds
+02:08:51 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 6.20 seconds
+02:08:55 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 6.14 seconds
+02:08:55 tinker_cookbook.utils.misc_utils:23 [INFO] sample took 90.96 seconds
+02:08:55 tinker_cookbook.utils.misc_utils:20 [INFO] Starting assemble_training_data
+02:08:55 tinker_cookbook.utils.misc_utils:23 [INFO] assemble_training_data took 0.02 seconds
+02:08:55 train_on_policy:297 [INFO] <|im_start|>user
+You are a coding expert. You will be given a coding problem, and you need to write a correct Python program that matches the specification and passes all tests. The time limit is 1 second. You may start by outlining your thought process. In the end, please provide the complete code in a code block enclosed with ``` ```.
+
+You are an expert Python programmer. You will be given a question (problem specification) and will generate a correct Python program that matches the specification and passes all tests.
+
+You are given a string D representing one of the eight directions (north, east, west, south, northeast, northwest, southeast, southwest). The correspondence between the directions and their representing strings is as follows.
+
+- North: N
+- East: E
+- West: W
+- South: S
+- Northeast: NE
+- Northwest: NW
+- Southeast: SE
+- Southwest: SW
+
+Print the string representing the direction opposite to the direction denoted by D. The solution will be evaluated in a code environment.### Format: Read the inputs from stdin solve the problem and write the answer to stdout (do not directly test on the sample inputs). Enclose your code within delimiters as follows. Ensure that when the python program runs, it reads the inputs, runs the algorithm and writes output to STDOUT.
+```python
+# YOUR CODE HERE
+```
+
+### Answer: (use the provided format with backticks)
+
+<|im_end|>
+<|im_start|>assistant
+I'll solve this step by step.
+
+## Problem Understanding
+
+1. We have a string D representing one of 8 directions
+2. The directions are: North (N), East (E), West (W), South (S), Northeast (NE), Northwest (NW), Southeast (SE), Southwest (SW)
+3. We need to print the string representing the opposite direction to the given direction
+
+## Step-by-step Analysis
+
+Let me identify the opposite directions:
+- North (N) → South (S)
+- East (E) → West (W) 
+- West (W) → East (E)
+- South (S) → North (N)
+- Northeast (NE) → Southwest (SW)
+- Northwest (NW) → Southeast (SE)
+- Southeast (SE) → Northwest (NW)
+- Southwest (SW) → Northeast (NE)
+
+## Approach
+
+I can create a dictionary that maps each direction to its opposite:
+- N → S
+- E → W
+- W → E
+- S → N
+- NE → SW
+- NW → SE
+- SE → NW
+- SW → NE
+
+## Implementation
+
+```python
+# Read the input direction
+D = input().strip()
+
+# Create a mapping from direction to its opposite
+opposite_directions = {
+    'N': 'S',
+    'E': 'W',
+    'W': 'E',
+    'S': 'N',
+    'NE': 'SW',
+    'NW': 'SE',
+    'SE': 'NW',
+    'SW': 'NE'
+}
+
+# Print the opposite direction
+print(opposite_directions[D])
+```
+
+The solution is straightforward:
+1. Read the input string D
+2. Use a dictionary to map each direction to its opposite
+3. Print the result
+
+This will correctly handle all 8 direction cases as specified.<|im_end|>
+02:08:55 tinker_cookbook.utils.misc_utils:20 [INFO] Starting build_teacher_inputs
+02:08:55 tinker_cookbook.utils.misc_utils:23 [INFO] build_teacher_inputs took 0.01 seconds
+02:08:55 tinker_cookbook.utils.misc_utils:20 [INFO] Starting compute_kl_penalty
