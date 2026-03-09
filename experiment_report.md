@@ -196,7 +196,12 @@ Sampling dominates cost (52%), followed by training (34%), then prefill (14%). T
 
 ## 7. Raw Logs
 
-Full console output saved in `run_output_v2.log`. Structured metrics at:
+Two console logs were saved:
+
+- `run_output.log`: baseline run with the original logging format (no token/grade timing fields).
+- `run_output_v2.log`: v2 run with extended logging, including token and grade timing fields.
+
+Structured metrics for the v2 run are at:
 ```
 /root/tinker-examples/distillation/sdpo-code-Qwen-Qwen3-4B-Instruct-2507-128rank-0.0001lr-2batch-2026-03-08-22-25/metrics.jsonl
 ```
