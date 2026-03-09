@@ -482,3 +482,7 @@ The block exists at time T+0.5 if:
 02:09:26 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
 02:09:31 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
 02:09:31 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:09:36 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:09:36 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+02:09:36 tinker_cookbook.utils.misc_utils:23 [INFO] run_evals took 70.01 seconds
+02:09:36 tinker_cookbook.utils.misc_utils:20 [INFO] Starting sample

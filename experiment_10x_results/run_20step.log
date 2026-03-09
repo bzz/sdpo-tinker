@@ -2325,10 +2325,9 @@ for a, t in queries:
 02:09:19 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.16 seconds
 02:09:19 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
 02:09:20 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
-  │ 0.001043    │
-│ optim/kl_sample_train_v2       │ 0.000816    │
-│ optim/lr                       │ 0.000100    │
-│ progress/batch                 │ 7           │
+02:09:36 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:09:37 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 0.14 seconds
+s/batch                 │ 7           │
 │ progress/done_frac             │ 0.400000    │
 │ teacher_kl                     │ 0.005361    │
 │ teacher_kl/dataset_0           │ 0.005361    │
@@ -3606,3 +3605,7 @@ This will correctly handle all 8 direction cases as specified.<|im_end|>
 │ train_total_tokens             │ 20517       │
 └────────────────────────────────┴─────────────┘
 02:09:04 tinker_cookbook.utils.misc_utils:20 [INFO] Starting sample
+02:09:38 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:09:38 tinker_cookbook.utils.misc_utils:20 [INFO] Starting grade
+02:09:44 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 6.22 seconds
+02:09:44 tinker_cookbook.utils.misc_utils:23 [INFO] grade took 6.22 seconds
