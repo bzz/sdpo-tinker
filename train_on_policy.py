@@ -281,7 +281,7 @@ async def prepare_minibatch(
         data_D, metadata_D = assemble_training_data(trajectory_groups_P, advantages_P)
 
     # Count train tokens: total tokens in each datum and masked (action) tokens
-    # that the optimizer actually processes.
+    # contributing to the loss.
     train_total_tokens = sum(datum.model_input.length for datum in data_D)
     train_action_tokens = sum(
         int(datum.loss_fn_inputs["mask"].to_torch().sum().item()) for datum in data_D
