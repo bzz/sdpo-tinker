@@ -48,6 +48,13 @@ from tinker_cookbook.rl.train import (
     save_checkpoint_and_get_sampling_client,
     train_step,
 )
+try:
+    from tinker_cookbook.rl.train import _format_chkpt_name
+except ImportError:
+    # From https://github.com/bzz/tinker-cookbook/tree/bzz/rl-prompt-template-rlvr-openchar
+    def _format_chkpt_name(name: str, prefix: str | None) -> str:
+        return f"{prefix}_{name}" if prefix else name
+
 from tinker_cookbook.rl.types import (
     EnvGroupBuilder,
     TrajectoryGroup,
@@ -58,6 +65,7 @@ from tinker_cookbook.utils.misc_utils import timed
 from tinker_cookbook.utils.trace import scope, update_scope_context, trace_init
 
 from env import SDPOCodeGroupBuilder, build_sdpo_teacher_inputs
+
 
 logger = logging.getLogger(__name__)
 
@@ -257,6 +265,22 @@ class Config:
     # If True, run evaluators once and exit without training.
     eval_only: bool = False
 
+    # TTL for checkpoints in seconds (None = no expiry).
+    ttl_seconds: int | None = 259200  # 3 days
+
+    # Prefix for checkpoint names, e.g. "sdpo-code-qwen3-8b-"
+    chkpt_name_prefix: str | None = None
+
+    @property
+    def checkpoint_kwargs(self) -> dict[str, Any]:
+        """Optional args for RL save_checkpoint_and_get_sampling_client / compute_full_batch_metrics_and_get_sampling_client.
+        From https://github.com/bzz/tinker-cookbook/tree/bzz/rl-prompt-template-rlvr-openchar
+        """
+        kw: dict[str, Any] = {}
+        if self.chkpt_name_prefix is not None:
+            kw["chkpt_name_prefix"] = self.chkpt_name_prefix
+        return kw
+
 
 @scope
 async def prepare_minibatch(
@@ -379,6 +403,8 @@ async def do_train_step_and_get_sampling_client(
         cfg.log_path,
         cfg.save_every,
         cfg.compute_post_kl,
+        ttl_seconds=cfg.ttl_seconds,
+        **cfg.checkpoint_kwargs,
     )
     metrics.update(full_batch_metrics)
 
@@ -403,7 +429,9 @@ async def do_sync_training(
 
     # Initial sampling client
     sampling_client, _ = await save_checkpoint_and_get_sampling_client(
-        training_client, start_batch, cfg.log_path, cfg.save_every
+        training_client, start_batch, cfg.log_path, cfg.save_every,
+        ttl_seconds=cfg.ttl_seconds,
+        **cfg.checkpoint_kwargs,
     )
 
     for i_batch in range(start_batch, end_batch):
@@ -415,7 +443,7 @@ async def do_sync_training(
         t_start = time.time()
 
         # Run evaluations
-        if cfg.eval_every > 0 and i_batch % cfg.eval_every == 0:
+        if (cfg.eval_every > 0 and i_batch % cfg.eval_every == 0) or i_batch == end_batch - 1:
             with timed("run_evals", metrics):
                 for evaluator in evaluators:
                     if hasattr(evaluator, "env_group_builders_P"):
@@ -614,10 +642,11 @@ async def main(
     if start_batch < num_batches:
         _ = await checkpoint_utils.save_checkpoint_async(
             training_client=training_client,
-            name="final",
+            name=_format_chkpt_name("final", cfg.chkpt_name_prefix),
             log_path=cfg.log_path,
             kind="both",
             loop_state={"batch": num_batches},
+            ttl_seconds=cfg.ttl_seconds,
         )
     else:
         logger.info("Training was already complete; nothing to do")

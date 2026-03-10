@@ -141,7 +141,12 @@ def _load_lcbv6_tasks(
     split: Literal["train", "test"],
     n: int | None = None,
 ) -> list[Task]:
-    """Load tasks from the bzz2/live_code_bench_v6_lite_sdpo dataset."""
+    """Load tasks from the bzz2/live_code_bench_v6_lite_sdpo dataset.
+
+    This dataset is uniform LiveCodeBench -- every ground_truth is a dict with
+    keys {inputs, outputs, testtype, fn_name, time_limit}.  We convert directly
+    instead of routing through ``_normalize_tests`` / ``taco_to_lcb_format``.
+    """
     logger.info("Loading lcbv6 (%s)...", split)
     ds = load_dataset("bzz2/live_code_bench_v6_lite_sdpo", "parquet", split=split)
 
@@ -151,9 +156,21 @@ def _load_lcbv6_tasks(
             break
         example: dict[str, Any] = row  # type: ignore[assignment]
         gt = json.loads(example["reward_model"]["ground_truth"])
-        tests = _normalize_tests(gt, {})
+
+        fn_name = gt.get("fn_name") or ""
+        is_functional = bool(fn_name)
+        tests: list[dict[str, Any]] = []
+        for inp, out in zip(gt["inputs"], gt["outputs"]):
+            test: dict[str, Any] = {
+                "input": str(inp),
+                "output": str(out),
+                "testtype": "functional" if is_functional else "stdin_stdout",
+                "metadata": {"func_name": fn_name} if is_functional else {},
+            }
+            tests.append(test)
         if not tests:
             continue
+
         description = example["extra_info"]["description"]
         question = fetch_live_code_bench_system_prompt(description)
         tasks.append(Task(problem=question, tests=tests, starter_code=None))

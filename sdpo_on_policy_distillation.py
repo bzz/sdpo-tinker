@@ -94,6 +94,12 @@ class CLIConfig:
     # Service configuration
     base_url: str | None = None
 
+    # TTL for checkpoints in seconds (None = no expiry).
+    ttl_seconds: int | None = 259200  # 3 days
+
+    # Prefix for checkpoint names, e.g. "sdpo-code-qwen3-8b-"
+    chkpt_name_prefix: str | None = None
+
     behavior_if_log_dir_exists: cli_utils.LogdirBehavior = "ask"
 
 
@@ -175,6 +181,8 @@ async def cli_main(cli_config: CLIConfig):
         save_every=cli_config.save_every,
         max_step=cli_config.max_step,
         eval_only=cli_config.eval_only,
+        ttl_seconds=cli_config.ttl_seconds,
+        chkpt_name_prefix=cli_config.chkpt_name_prefix,
     )
 
     cli_utils.check_log_dir(log_path, behavior_if_exists=cli_config.behavior_if_log_dir_exists)

@@ -35,16 +35,30 @@ Every call to `_handle_generate` (interactive `[g]` command **or** `--generate` 
 
 ## Validating changes non-interactively
 
+### Tiny overfit run on LiveCodeBenchV5
+
+```sh
+python sdpo_on_policy_distillation.py \
+    model_name=Qwen/Qwen3-4B-Instruct-2507 \
+    teacher_model=Qwen/Qwen3-4B-Instruct-2507 \
+    dataset_name=lcbv5 \
+    n_tasks=4 groups_per_batch=2 group_size=4 \
+    max_step=2 eval_every=2 \
+    max_eval_tasks=5 \
+    learning_rate=1e-4 \
+    lora_rank=128 \
+	chkpt_name_prefix=sdpo_overfit \
+    sandbox_backend=local
+```
+
+### Visualize logprob difference for teacher and student responses for a few samples LiveCodeBenchV6
+
 `play_w_code_env.py` supports a `--generate` flag that runs the full generation + grading flow for all loaded tasks without any interactive prompts, then exits.  Use this to smoke-test changes without manually driving the TUI:
 
 ```bash
 # Local sandbox — no Docker required; ~2 tasks × 2 samples
-python play_w_code_env.py --n-tasks 2 --model Qwen/Qwen3-8B -n 2 --seed 44 \
+python play_w_code_env.py --n-tasks 2 --model Qwen/Qwen3-4B-Instruct-2507 -n 2 --seed 44 --dataset lcbv6 \
     --generate --sandbox local
-
-# Bubblewrap sandbox — unprivileged isolation, no Docker
-python play_w_code_env.py --n-tasks 2 --model Qwen/Qwen3-8B -n 2 --seed 44 \
-    --generate --sandbox bwrap
 ```
 
 The Rich output is identical to the interactive `[g]enerate` flow: rollout panels, grading summary, and (on failures) teacher logprob visualisation.

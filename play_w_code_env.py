@@ -15,6 +15,7 @@ Usage:
     python play_w_code_env.py                 # 3 test-split problems, manual only
     python play_w_code_env.py --n-tasks 5     # 5 problems
     python play_w_code_env.py --split train   # use train split
+    python play_w_code_env.py --dataset-name lcbv6  # only LCB v6 problems
     # With Tinker generation (requires API key):
     python play_w_code_env.py --model Qwen/Qwen3-8B --renderer qwen3
     # Grouped rollout -- generate 8 samples, use passing siblings as teacher demos:
@@ -346,6 +347,15 @@ async def _handle_generate(
         f"(teacher prompt: {teacher_input.length - len(student_tokens)} tok)...[/dim]"
     )
 
+    teacher_full_text = tokenizer.decode(teacher_input.to_ints())
+    console.print(Panel(
+        Text(teacher_full_text, overflow="fold"),
+        title=f"[bold]Full teacher input ({teacher_input.length} tok)[/bold]",
+        border_style="magenta",
+        expand=True,
+        padding=(1, 2),
+    ))
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -504,6 +514,11 @@ def main() -> None:
              "Requires --model.  NOTE: consumes Tinker API tokens.",
     )
     parser.add_argument(
+        "--dataset-name", default=None,
+        choices=["lcbv5", "lcbv6", "codeforces"],
+        help="Sub-dataset to load (default: all DeepCoder). Matches sdpo_on_policy_distillation.py.",
+    )
+    parser.add_argument(
         "--sandbox", default="sandboxfusion",
         choices=["sandboxfusion", "local", "bwrap"],
         help="Sandbox backend for code grading. "
@@ -530,7 +545,7 @@ def main() -> None:
         renderer = renderers.get_renderer(name=args.renderer, tokenizer=tokenizer)
 
     console.print(f"[bold]Loading {args.n_tasks} tasks from '{args.split}' split...[/bold]")
-    tasks = load_tasks(args.n_tasks, split=args.split, seed=args.seed)
+    tasks = load_tasks(args.n_tasks, split=args.split, seed=args.seed, dataset_name=args.dataset_name)
     if not tasks:
         console.print("[red]No tasks loaded. Check dataset availability.[/red]")
         sys.exit(1)

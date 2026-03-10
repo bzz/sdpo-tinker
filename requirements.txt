@@ -1,2 +1,2 @@
-tinker-cookbook @ git+https://github.com/thinking-machines-lab/tinker-cookbook.git@aae9dac6d34c59b0edfaf03009ff4cc9607376ac
+tinker-cookbook @ git+https://github.com/bzz/tinker-cookbook.git@bzz/rl-prompt-template-rlvr-openchar
 rich==14.3.3
