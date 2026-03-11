@@ -172,7 +172,7 @@ def _load_lcbv6_tasks(
             continue
 
         description = example["extra_info"]["description"]
-        question = fetch_live_code_bench_system_prompt(description)
+        question = fetch_live_code_bench_system_prompt(f"{description}\n\n")
         tasks.append(Task(problem=question, tests=tests, starter_code=None))
     return tasks
 
@@ -472,7 +472,7 @@ class SDPOCodeGroupBuilder(EnvGroupBuilder):
         n_passed = sum(1 for e in envs if e.passed)
         n_total = len(envs)
         return [
-            (0.0, {"group_pass_rate": n_passed / n_total if n_total else 0.0})
+            (0.0, {"group_pass_rate": n_passed / n_total if n_total else 0.0, "group_has_sibling": float(0 < n_passed < n_total)})
             for _ in trajectory_group
         ]
 
