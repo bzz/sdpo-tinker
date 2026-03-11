@@ -235,32 +235,20 @@ def _build_rollout_panels(
 
 async def _handle_generate(
     task: Task,
+    builder: SDPOCodeGroupBuilder,
+    policy: TinkerTokenCompleter,
     sampling_client: tinker.SamplingClient,
-    renderer: renderers.Renderer,
     tokenizer: Any,
-    temperature: float,
-    max_tokens: int,
-    n: int = 1,
-    sandbox: str = "sandboxfusion",
-) -> None:
-    """Run the [g]enerate flow using the real SDPOCodeEnv via do_group_rollout."""
+) -> float:
+    """Run the [g]enerate flow using the real SDPOCodeEnv via do_group_rollout.
 
-    builder = SDPOCodeGroupBuilder(
-        task=task,
-        group_size=n,
-        renderer=renderer,
-        timeout=6,
-        backend=sandbox,
-    )
-    policy = TinkerTokenCompleter(
-        sampling_client=sampling_client,
-        max_tokens=max_tokens,
-        temperature=temperature,
-    )
+    Returns the pass rate (n_passed / n).
+    """
+    n = builder.group_size
 
     # -- 1. Rollout (sample + grade via Env) -----------------------------------
     console.print(Rule(f"Step 1: Rollout (n={n})", style="bold cyan"))
-    console.print(f"[dim]T={temperature}  max_tokens={max_tokens}[/dim]")
+    console.print(f"[dim]T={policy.temperature}  max_tokens={policy.max_tokens}[/dim]")
 
     with Progress(
         SpinnerColumn(),
@@ -317,7 +305,7 @@ async def _handle_generate(
                 tokenizer, ac.tokens, ac.logprobs,
                 "First passing sample (coloured by student self-confidence, no teacher)",
             )
-        return
+        return pass_rate
 
     if passed_indices:
         console.print(f"\n[dim]Using sample \\[{passed_indices[0]+1}] as sibling solution for teacher prompt[/dim]")
@@ -325,7 +313,7 @@ async def _handle_generate(
         console.print("\n[dim]No passing sibling -- teacher prompt will use feedback only[/dim]")
 
     # -- 3. Teacher forward pass (SDPO re-prompt) ------------------------------
-    teacher_inputs_G = build_sdpo_teacher_inputs(task, trajectories, renderer, tokenizer)
+    teacher_inputs_G = build_sdpo_teacher_inputs(task, trajectories, builder.renderer, tokenizer)
 
     first_failed = failed_indices[0]
     first_traj = trajectories[first_failed]
@@ -336,10 +324,10 @@ async def _handle_generate(
 
     if student_logprobs is None:
         console.print("[yellow]No student logprobs available -- skipping teacher diff.[/yellow]")
-        return
+        return pass_rate
     if teacher_input is None:
         console.print("[yellow]No teacher input for this trajectory -- skipping.[/yellow]")
-        return
+        return pass_rate
 
     console.print(Rule(f"Step 3: Teacher logprobs for sample [{first_failed+1}]", style="bold cyan"))
     console.print(
@@ -383,6 +371,8 @@ async def _handle_generate(
     if len(failed_indices) > 1:
         console.print(f"\n[dim]({len(failed_indices) - 1} more failed sample(s) not shown)[/dim]")
 
+    return pass_rate
+
 
 # ---------------------------------------------------------------------------
 # Non-interactive generate mode
@@ -398,18 +388,92 @@ async def generate_mode(
     max_tokens: int,
     n: int,
     sandbox: str,
+    print_every: int = 1,
 ) -> None:
-    """Run _handle_generate for each task non-interactively and exit."""
+    """Run generation for each task, print SDPO signal summary at the end.
+
+    Args:
+        print_every: Show full per-problem detail every N problems.
+                     0 = summary only.
+    """
     _print_sandbox_info(sandbox, len(tasks))
-    gen_hint = " [bold yellow]g[/bold yellow]enerate |" if sampling_client else ""
-    console.print(f"Commands:{gen_hint} [bold yellow]n[/bold yellow]ext | [bold yellow]q[/bold yellow]uit | Enter to submit code\n")
+    console.print(f"[bold]Generating {n} sample(s) per problem, T={temperature}[/bold]\n")
+
+    policy = TinkerTokenCompleter(
+        sampling_client=sampling_client, max_tokens=max_tokens, temperature=temperature,
+    )
+
+    pass_rates: list[float] = []
     for i, task in enumerate(tasks):
-        print_problem(i, len(tasks), task)
-        await _handle_generate(
-            task, sampling_client, renderer, tokenizer,
-            temperature, max_tokens, n=n, sandbox=sandbox,
+        builder = SDPOCodeGroupBuilder(
+            task=task, group_size=n, renderer=renderer, timeout=6, backend=sandbox,
         )
-    console.print("\n[bold green]All problems done.[/bold green]")
+        show_detail = print_every > 0 and (i % print_every == 0)
+        if show_detail:
+            print_problem(i, len(tasks), task)
+            rate = await _handle_generate(
+                task, builder, policy, sampling_client, tokenizer,
+            )
+        else:
+            traj_group = await do_group_rollout(builder, policy)
+            n_passed = sum(
+                1 for t in traj_group.trajectories_G
+                if t.transitions[0].metrics.get("correct", 0)
+            )
+            rate = n_passed / n if n else 0.0
+
+        pass_rates.append(rate)
+        n_pass = int(round(rate * n))
+        label = (
+            "[green]ALL PASS[/green]" if rate == 1.0
+            else "[red]ALL FAIL[/red]" if rate == 0.0
+            else f"[yellow]MIXED[/yellow] {n_pass}/{n}"
+        )
+        console.print(f"  Problem {i+1}/{len(tasks)}: {label} ({rate:.0%})")
+
+    # -- SDPO signal summary ---------------------------------------------------
+    all_pass = sum(1 for r in pass_rates if r == 1.0)
+    all_fail = sum(1 for r in pass_rates if r == 0.0)
+    mixed = len(pass_rates) - all_pass - all_fail
+    total = len(pass_rates)
+
+    console.print()
+    console.print(Rule("SDPO Signal Summary", style="bold cyan"))
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Category", style="bold")
+    table.add_column("Count", justify="right")
+    table.add_column("Fraction", justify="right")
+    table.add_column("SDPO Signal")
+    table.add_row(
+        "All pass", str(all_pass), f"{all_pass/total:.0%}" if total else "-",
+        "[dim]No gradient (no failures)[/dim]",
+    )
+    table.add_row(
+        "All fail", str(all_fail), f"{all_fail/total:.0%}" if total else "-",
+        "[dim]KL signal but no sibling solution[/dim]",
+    )
+    table.add_row(
+        "Mixed", str(mixed), f"{mixed/total:.0%}" if total else "-",
+        "[bold green]Full SDPO signal (sibling + failures)[/bold green]",
+    )
+    table.add_row("", "", "", "")
+    table.add_row(
+        "[bold]Total[/bold]", f"[bold]{total}[/bold]", "",
+        f"[bold]Mean pass rate: {sum(pass_rates)/total:.1%}[/bold]" if total else "",
+    )
+    console.print(table)
+
+    if mixed == 0:
+        console.print(
+            "\n[bold red]Warning:[/bold red] No mixed groups. "
+            "SDPO will have no sibling solutions. "
+            "Consider a different model/dataset difficulty or larger group_size."
+        )
+    elif mixed / total < 0.2:
+        console.print(
+            f"\n[bold yellow]Warning:[/bold yellow] Only {mixed/total:.0%} of groups are mixed. "
+            "Most training steps will have weak or no SDPO signal."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +504,12 @@ async def interactive_loop(
     gen_hint = " [bold yellow]g[/bold yellow]enerate |" if sampling_client else ""
     console.print(f"Commands:{gen_hint} [bold yellow]n[/bold yellow]ext | [bold yellow]q[/bold yellow]uit | Enter to submit code\n")
 
+    policy: TinkerTokenCompleter | None = None
+    if sampling_client:
+        policy = TinkerTokenCompleter(
+            sampling_client=sampling_client, max_tokens=max_tokens, temperature=temperature,
+        )
+
     for i, task in enumerate(tasks):
         print_problem(i, len(tasks), task)
 
@@ -457,10 +527,12 @@ async def interactive_loop(
                 console.print("[yellow]Skipped.[/yellow]")
                 break
             if cmd in ("g", "gen", "generate") and sampling_client:
-                assert renderer is not None and tokenizer is not None
+                assert renderer is not None and tokenizer is not None and policy is not None
+                builder = SDPOCodeGroupBuilder(
+                    task=task, group_size=n, renderer=renderer, timeout=6, backend=sandbox_name,
+                )
                 await _handle_generate(
-                    task, sampling_client, renderer, tokenizer,
-                    temperature, max_tokens, n=n, sandbox=sandbox_name,
+                    task, builder, policy, sampling_client, tokenizer,
                 )
                 continue
 
@@ -525,6 +597,11 @@ def main() -> None:
              "'local' and 'bwrap' do not require Docker. "
              "'bwrap' requires bubblewrap in PATH.",
     )
+    parser.add_argument(
+        "--print-every", type=int, default=1,
+        help="In --generate mode, print full per-problem detail every N problems. "
+             "0 = summary only. (default: 1)",
+    )
     args = parser.parse_args()
 
     if args.sandbox_url:
@@ -560,6 +637,7 @@ def main() -> None:
             max_tokens=args.max_tokens,
             n=args.n,
             sandbox=args.sandbox,
+            print_every=args.print_every,
         ))
     else:
         asyncio.run(interactive_loop(
