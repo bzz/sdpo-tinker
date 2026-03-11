@@ -22,6 +22,26 @@ This research prototype loosly reproduces Fig.1 plot in simpler settings using u
 python play_w_code_env.py --n-tasks 3 --model Qwen/Qwen3-8B -n 4 --seed 44
 ```
 
+## Implementation vs. paper
+
+The [SDPO paper](https://arxiv.org/abs/2601.20802) and its [verl-based replication package](replication-package/) implement the SDPO loss as a **direct replacement** for the GRPO/PPO policy gradient loss. When `loss_mode == "sdpo"`, `compute_self_distillation_loss()` is called instead of `compute_policy_loss`. In token-level mode (reverse KL, `alpha=1.0`), the per-token loss is:
+
+```python
+log_ratio = student_log_probs - teacher_log_probs
+per_token_loss = log_ratio.detach() * student_log_probs
+```
+
+This is the REINFORCE-style gradient of the reverse KL (Proposition 2.1), where `log_ratio` acts as the per-token advantage with stopgrad via `.detach()`.
+
+This tinker-cookbook fork takes a different but **equivalent** approach:
+- The env always returns `reward=0.0`, so group-centered base advantages are all zero.
+- `incorporate_kl_penalty()` adds `-kl_coef * (student_lp - teacher_lp)` per action token to the datum's advantages.
+- The standard tinker-cookbook `importance_sampling` loss function then uses these KL-derived advantages as the sole learning signal.
+
+The per-token signal is identical: `student_lp - teacher_lp` (negative of A_SDPO from paper Eq. 2.1). Group-level information enters through the teacher prompt: for failing trajectories, the teacher sees a passing sibling solution from the same rollout group when available (matching paper Table 2).
+
+**What this fork does not implement** (relative to the full verl replication package): full-logit (top-K) distillation, Jensen-Shannon divergence option, EMA/trust-region teacher regularization, advantage clipping. It uses only the token-level reverse KL path with a fixed reference teacher.
+
 ## Steps
 
 For execution feedback we use [Sandbox Fusion](https://bytedance.github.io/SandboxFusion/) provides local Docker-based sandboxing. 
