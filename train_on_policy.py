@@ -15,6 +15,9 @@ SDPO-specific changes:
   * do_sync_training() sets do_remove_constant_reward_groups=False because the
     SDPO code env always returns reward=0.
   * main() fixes upstream double-creation of the teacher sampling client.
+  * colorize_kl_example() and incorporate_kl_penalty() print one failing
+    sample per step with tokens colored by per-token reverse KL
+    (student_lp - teacher_lp), the actual SDPO learning signal.
 """
 
 import asyncio
@@ -30,7 +33,8 @@ import torch
 from tinker.types import LossFnType
 
 from tinker_cookbook import checkpoint_utils, renderers
-from tinker_cookbook.display import colorize_example
+from tinker_cookbook.display import colorize_example, to_ints
+from tinker_cookbook.utils.format_colorized import format_colorized
 from tinker_cookbook.distillation.datasets import (
     CompositeDataset,
     DistillationDatasetConfig,
@@ -68,6 +72,25 @@ from env import SDPOCodeGroupBuilder, build_sdpo_teacher_inputs
 
 
 logger = logging.getLogger(__name__)
+
+
+def colorize_kl_example(
+    datum: tinker.Datum,
+    reverse_kl: torch.Tensor,
+    tokenizer: Any,
+) -> str:
+    """Return ANSI-colorized text where tokens are colored by per-token reverse KL.
+
+    Green = teacher more confident (student will be pushed toward),
+    Yellow = outside mask / equal,
+    Red = student more confident (student will be pushed away).
+    """
+    int_tokens = [
+        token for chunk in datum.model_input.chunks
+        for token in to_ints(chunk, tokenizer)
+    ] + [datum.loss_fn_inputs["target_tokens"].tolist()[-1]]
+    weights = [0.0] + (-reverse_kl).tolist()
+    return format_colorized(int_tokens, weights, tokenizer)
 
 
 def _get_renderer_for_builder(
@@ -132,6 +155,7 @@ async def incorporate_kl_penalty(
     dataset_indices_D: List[int],
     kl_penalty_coef: float,
     kl_discount_factor: float,
+    tokenizer: Any = None,
 ) -> Dict[str, float | int]:
     """
     Compute reverse KL between the student (log p) and the teacher model (log q), computed as
@@ -178,6 +202,20 @@ async def incorporate_kl_penalty(
         teacher_lp_aligned = torch.zeros_like(sampled_logprobs)
         teacher_lp_aligned[-n_action:] = teacher_action_lp
         reverse_kl.append((sampled_logprobs - teacher_lp_aligned) * mask)
+
+    # Print one failing sample colored by per-token reverse KL (the SDPO learning signal).
+    if tokenizer is not None:
+        for i, (datum, rkl) in enumerate(zip(data_D, reverse_kl)):
+            if teacher_inputs_D[i] is not None:
+                n_action = int(float_masks[i].sum().item())
+                avg_kl = rkl.sum().item() / max(n_action, 1)
+                logger.info(
+                    "SDPO KL debug (avg per-token reverse_kl=%.3f, %d action tokens):\n%s",
+                    avg_kl, n_action,
+                    colorize_kl_example(datum, rkl, tokenizer),
+                )
+                break
+
     # Track per-dataset KL for logging
     # dataset_idx -> (sum of KL, sum of mask)
     per_dataset_kl: Dict[int, tuple[float, float]] = {}
@@ -351,6 +389,7 @@ async def prepare_minibatch(
                 dataset_indices_D,
                 kl_penalty_coef,
                 kl_discount_factor,
+                tokenizer=tokenizer,
             )
         metrics.update(kl_penalty_metrics)
 
