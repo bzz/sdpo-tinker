@@ -22,6 +22,23 @@ This research prototype loosly reproduces Fig.1 plot in simpler settings using u
 python play_w_code_env.py --n-tasks 3 --model Qwen/Qwen3-8B -n 4 --seed 44
 ```
 
+* Measure pass@k of a model served by vLLM on a given LiveCodeBench dataset (e.g to understand teacher capabilities)
+```sh
+docker run -it -p 8080:8002 volcengine/sandbox-fusion:server-20250609
+vllm serve Qwen/Qwen3-4B-Instruct-2507 --max-model-len 16536 --port 8003
+
+export SANDBOX_URL='http://localhost:8002/run_code'
+export SANDBOX_MAX_CONCURRENCY=256
+python eval_pass_at_k.py \
+    --model Qwen/Qwen3-4B-Instruct-2507 \
+    --base-url http://localhost:8003/v1 \
+    --limit 30 -n 8 -k 1,2,4,8 \
+    --dataset-name lcbv5 --split train \
+    --temperature 1.0 --sandbox sandboxfusion \
+    --workers 32
+
+```
+
 ## Implementation vs. paper
 
 The [SDPO paper](https://arxiv.org/abs/2601.20802) and its [verl-based replication package](replication-package/) implement the SDPO loss as a **direct replacement** for the GRPO/PPO policy gradient loss. When `loss_mode == "sdpo"`, `compute_self_distillation_loss()` is called instead of `compute_policy_loss`. In token-level mode (reverse KL, `alpha=1.0`), the per-token loss is:
