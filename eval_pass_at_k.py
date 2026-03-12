@@ -148,6 +148,7 @@ async def eval_one(
 
     return {
         "task_idx": task_idx,
+        "prompt": prompt,
         "n": n,
         "n_passed": n_passed,
         "samples": samples,
