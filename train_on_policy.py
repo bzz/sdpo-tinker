@@ -20,7 +20,9 @@ SDPO-specific changes vs the upstream:
 Baseline / algorithm selection (Config.algorithm):
   "sdpo"    — prepare_minibatch_sdpo(): feedback-conditioned teacher KL
   "distill" — prepare_minibatch():      teacher scores student output directly
-  "grpo"    — prepare_minibatch():      execution reward, no teacher KL
+  "grpo"    — prepare_minibatch():      execution reward; teacher KL is off by
+                default (kl_penalty_coef=0) but can be optionally combined via
+                a nonzero kl_penalty_coef.
 """
 
 import asyncio
