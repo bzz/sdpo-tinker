@@ -1,20 +1,27 @@
 """
-On-policy distillation from in-context feedback for LiveCodeBench (SDPO).
+On-policy training for LiveCodeBench with multiple experiment modes.
 
-This script implements on-policy distillation where a student model learns from
-itself prompted with execution feedback by minimizing KL divergence against a
-fixed reference teacher.  No correctness or format rewards are used -- only KL
-penalty provides supervision.
+Modes (controlled by use_execution_reward and use_sdpo_teacher_inputs):
 
-Example usage:
+  SDPO (default):  token-level KL divergence against a feedback-conditioned teacher.
+  GRPO:            Execution reward with per-group advantage centering.
+  Distillation:    KL divergence against a teacher scoring student output directly.
+  Combined:        Execution reward + distillation KL.
+
+Example — SDPO (original):
     python sdpo_on_policy_distillation.py \
-        model_name=Qwen/Qwen3-8B \
-        group_size=8 \
-        groups_per_batch=8 \
-        learning_rate=1e-6 \
-        lora_rank=32 \
-        max_step=50 \
-        wandb_project=sdpo_code
+        model_name=Qwen/Qwen3-8B group_size=8 groups_per_batch=8 \
+        learning_rate=1e-6 lora_rank=32 max_step=50
+
+Example — GRPO with execution rewards:
+    python sdpo_on_policy_distillation.py \
+        model_name=Qwen/Qwen3-8B group_size=8 groups_per_batch=8 \
+        use_execution_reward=True kl_penalty_coef=0
+
+Example — On-policy distillation from a bigger teacher:
+    python sdpo_on_policy_distillation.py \
+        model_name=Qwen/Qwen3-4B-Instruct-2507 teacher_model=Qwen/Qwen3-32B \
+        use_sdpo_teacher_inputs=False
 """
 
 import asyncio
@@ -60,6 +67,13 @@ class CLIConfig:
     temperature: float = 1.0
     kl_penalty_coef: float = 1.0
     kl_discount_factor: float = 0.0
+
+    # When True, build SDPO feedback-conditioned teacher inputs.
+    # When False, teacher scores the student's exact output (standard distillation).
+    use_sdpo_teacher_inputs: bool = True
+
+    # When True, env returns execution reward (pass=1, fail=0) for GRPO-style training.
+    use_execution_reward: bool = False
 
     # Optimizer configuration
     num_substeps: int = 1
@@ -143,6 +157,7 @@ async def cli_main(cli_config: CLIConfig):
         n_tasks=cli_config.n_tasks,
         n_eval_tasks=cli_config.max_eval_tasks,
         dataset_name=cli_config.dataset_name,
+        use_execution_reward=cli_config.use_execution_reward,
     )
 
     # Create teacher config
@@ -168,6 +183,8 @@ async def cli_main(cli_config: CLIConfig):
         max_tokens=cli_config.max_tokens,
         kl_penalty_coef=cli_config.kl_penalty_coef,
         kl_discount_factor=cli_config.kl_discount_factor,
+        use_sdpo_teacher_inputs=cli_config.use_sdpo_teacher_inputs,
+        use_execution_reward=cli_config.use_execution_reward,
         num_substeps=cli_config.num_substeps,
         loss_fn=cli_config.loss_fn,
         loss_fn_config=cli_config.loss_fn_config,

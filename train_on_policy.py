@@ -156,6 +156,7 @@ async def incorporate_kl_penalty(
     kl_penalty_coef: float,
     kl_discount_factor: float,
     tokenizer: Any = None,
+    use_sdpo_teacher_inputs: bool = True,
 ) -> Dict[str, float | int]:
     """
     Compute reverse KL between the student (log p) and the teacher model (log q), computed as
@@ -163,8 +164,9 @@ async def incorporate_kl_penalty(
 
     teacher_inputs_D is a parallel list of ModelInputs, one per datum:
       - None means no KL contribution (passing SDPO trajectory)
-      - ModelInput is [SDPO reprompt][student tokens]; [-n_action:] logprobs align
-        with the response suffix.
+      - ModelInput is [SDPO reprompt][student tokens] (use_sdpo_teacher_inputs=True)
+        or [student prompt + response] (use_sdpo_teacher_inputs=False);
+        [-n_action:] logprobs align with the response suffix.
 
     Args:
         data_D: List of datums to compute KL for
@@ -173,6 +175,7 @@ async def incorporate_kl_penalty(
         dataset_indices_D: List of dataset indices, one per datum
         kl_penalty_coef: Coefficient for KL penalty
         kl_discount_factor: Discount factor for future KL
+        use_sdpo_teacher_inputs: Whether SDPO-style reprompted teacher inputs are used
     """
     # Compute the teacher's logprobs for each element of the batch; skip None entries.
     teacher_logprobs_D = await asyncio.gather(
@@ -203,15 +206,15 @@ async def incorporate_kl_penalty(
         teacher_lp_aligned[-n_action:] = teacher_action_lp
         reverse_kl.append((sampled_logprobs - teacher_lp_aligned) * mask)
 
-    # Print one failing sample colored by per-token reverse KL (the SDPO learning signal).
+    kl_label = "SDPO KL debug" if use_sdpo_teacher_inputs else "Distill KL debug"
     if tokenizer is not None:
         for i, (datum, rkl) in enumerate(zip(data_D, reverse_kl)):
             if teacher_inputs_D[i] is not None:
                 n_action = int(float_masks[i].sum().item())
                 avg_kl = rkl.sum().item() / max(n_action, 1)
                 logger.info(
-                    "SDPO KL debug (avg per-token reverse_kl=%.3f, %d action tokens):\n%s",
-                    avg_kl, n_action,
+                    "%s (avg per-token reverse_kl=%.3f, %d action tokens):\n%s",
+                    kl_label, avg_kl, n_action,
                     colorize_kl_example(datum, rkl, tokenizer),
                 )
                 break
@@ -277,6 +280,15 @@ class Config:
     kl_penalty_coef: float = 1.0
     kl_discount_factor: float = 0.0
 
+    # When True, build SDPO feedback-conditioned teacher inputs (reprompting
+    # with execution feedback + sibling solution).  When False, the teacher
+    # scores the student's exact output — standard on-policy distillation.
+    use_sdpo_teacher_inputs: bool = True
+
+    # When True, the env returns execution reward (pass=1, fail=0) enabling
+    # GRPO-style training.  When False, reward is always 0.
+    use_execution_reward: bool = False
+
     # Loss function and configuration.
     # See https://tinker-docs.thinkingmachines.ai/losses
     loss_fn: LossFnType = "importance_sampling"
@@ -329,6 +341,8 @@ async def prepare_minibatch(
     teacher_clients: List[tinker.SamplingClient],
     kl_penalty_coef: float,
     kl_discount_factor: float,
+    use_sdpo_teacher_inputs: bool = True,
+    use_execution_reward: bool = False,
 ) -> tuple[list[tinker.Datum], dict[str, Any]]:
     """Converts the trajectories into a minibatch, and provides metrics about the minibatch"""
 
@@ -359,17 +373,36 @@ async def prepare_minibatch(
             logger.info(colorize_example(datum, tokenizer, key="mask"))
             printed_datasets.add(dataset_idx)
 
+    # Print advantage-colored sample when execution rewards produce non-trivial advantages
+    if use_execution_reward:
+        printed_datasets_adv: set[int] = set()
+        for datum, metadata in zip(data_D, metadata_D):
+            dataset_idx = dataset_indices_P[metadata["group_idx"]]
+            if dataset_idx not in printed_datasets_adv:
+                logger.info(
+                    "GRPO advantage-colored sample:\n%s",
+                    colorize_example(datum, tokenizer, key="advantages"),
+                )
+                printed_datasets_adv.add(dataset_idx)
+
     # Incorporate KL penalty if configured
     if kl_penalty_coef > 0:
         with timed("build_teacher_inputs", metrics):
-            # Build SDPO feedback-conditioned teacher inputs aligned with data_D.
-            teacher_inputs_D = build_teacher_inputs_for_batch(
-                env_group_builders_P,
-                trajectory_groups_P,
-                metadata_D,
-                data_D,
-                tokenizer,
-            )
+            if use_sdpo_teacher_inputs:
+                teacher_inputs_D = build_teacher_inputs_for_batch(
+                    env_group_builders_P,
+                    trajectory_groups_P,
+                    metadata_D,
+                    data_D,
+                    tokenizer,
+                )
+            else:
+                teacher_inputs_D = [
+                    datum.model_input.append_int(
+                        int(datum.loss_fn_inputs["target_tokens"].data[-1])
+                    )
+                    for datum in data_D
+                ]
 
         with timed("compute_kl_penalty", metrics):
             # Map each datum to its teacher sampling client and dataset index using metadata
@@ -390,6 +423,7 @@ async def prepare_minibatch(
                 kl_penalty_coef,
                 kl_discount_factor,
                 tokenizer=tokenizer,
+                use_sdpo_teacher_inputs=use_sdpo_teacher_inputs,
             )
         metrics.update(kl_penalty_metrics)
 
@@ -419,6 +453,8 @@ async def do_train_step_and_get_sampling_client(
         teacher_clients,
         kl_penalty_coef=cfg.kl_penalty_coef,
         kl_discount_factor=cfg.kl_discount_factor,
+        use_sdpo_teacher_inputs=cfg.use_sdpo_teacher_inputs,
+        use_execution_reward=cfg.use_execution_reward,
     )
     metrics.update(prepare_minibatch_metrics)
 
@@ -492,6 +528,11 @@ async def do_sync_training(
 
         # Get batch and sample trajectories
         env_group_builders_P, dataset_indices_P = dataset.get_batch(i_batch)
+        # With execution rewards, drop groups where all rollouts got the same
+        # reward (all-pass or all-fail) since GRPO advantages would be zero.
+        # Without execution rewards the KL penalty is the sole signal, so we
+        # must keep constant-reward groups.
+        drop_constant = cfg.use_execution_reward and cfg.kl_penalty_coef == 0
         with timed("sample", metrics):
             trajectory_groups_P = await asyncio.gather(
                 *[
@@ -501,11 +542,7 @@ async def do_sync_training(
                             builder,
                             temperature=cfg.temperature,
                             max_tokens=cfg.max_tokens,
-                            # Keep constant-reward groups: SDPO env always returns reward=0,
-                            # so base advantages are all zero.  The sole supervision signal
-                            # is the KL to the teacher — dropping these groups would remove
-                            # all training signal.
-                            do_remove_constant_reward_groups=False,
+                            do_remove_constant_reward_groups=drop_constant,
                         ),
                         name=f"sample_task_{i}",
                     )
@@ -569,6 +606,14 @@ async def main(
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("pylatexenc").setLevel(logging.WARNING)
+
+    mode_parts = []
+    if cfg.use_execution_reward:
+        mode_parts.append("execution_reward")
+    if cfg.kl_penalty_coef > 0:
+        mode_parts.append(f"kl(coef={cfg.kl_penalty_coef}, sdpo={cfg.use_sdpo_teacher_inputs})")
+    mode_label = " + ".join(mode_parts) or "no signal (check config)"
+    logger.info(f"Experiment mode: {mode_label}")
 
     resume_info = checkpoint_utils.get_last_checkpoint(cfg.log_path)
     if resume_info:
