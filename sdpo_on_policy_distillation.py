@@ -1,14 +1,13 @@
 """
 On-policy training for LiveCodeBench with multiple experiment modes.
 
-Modes (controlled by use_execution_reward and use_sdpo_teacher_inputs):
+Algorithm is selected via the `algorithm` flag:
 
-  SDPO (default):  token-level KL divergence against a feedback-conditioned teacher.
-  GRPO:            Execution reward with per-group advantage centering.
-  Distillation:    KL divergence against a teacher scoring student output directly.
-  Combined:        Execution reward + distillation KL.
+  sdpo (default):  token-level KL divergence against a feedback-conditioned teacher.
+  grpo:            Execution reward with per-group advantage centering.
+  distill:         KL divergence against a teacher scoring student output directly.
 
-Example — SDPO (original):
+Example — SDPO (default):
     python sdpo_on_policy_distillation.py \
         model_name=Qwen/Qwen3-8B group_size=8 groups_per_batch=8 \
         learning_rate=1e-6 lora_rank=32 max_step=50
@@ -16,19 +15,19 @@ Example — SDPO (original):
 Example — GRPO with execution rewards:
     python sdpo_on_policy_distillation.py \
         model_name=Qwen/Qwen3-8B group_size=8 groups_per_batch=8 \
-        use_execution_reward=True kl_penalty_coef=0
+        algorithm=grpo
 
 Example — On-policy distillation from a bigger teacher:
     python sdpo_on_policy_distillation.py \
         model_name=Qwen/Qwen3-4B-Instruct-2507 teacher_model=Qwen/Qwen3-32B \
-        use_sdpo_teacher_inputs=False
+        algorithm=distill
 """
 
 import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 import chz
 from tinker.types import LossFnType
@@ -65,15 +64,14 @@ class CLIConfig:
     learning_rate: float = 1e-4
     max_tokens: int = 4096
     temperature: float = 1.0
-    kl_penalty_coef: float = 1.0
+    kl_penalty_coef: float | None = None  # None = per-algorithm default (0 for grpo, 1 for sdpo/distill)
     kl_discount_factor: float = 0.0
 
-    # When True, build SDPO feedback-conditioned teacher inputs.
-    # When False, teacher scores the student's exact output (standard distillation).
-    use_sdpo_teacher_inputs: bool = True
-
-    # When True, env returns execution reward (pass=1, fail=0) for GRPO-style training.
-    use_execution_reward: bool = False
+    # Training algorithm / baseline:
+    #   "sdpo"    — feedback-conditioned teacher KL (default)
+    #   "grpo"    — execution reward with per-group advantage centering
+    #   "distill" — on-policy distillation: teacher scores student output directly
+    algorithm: Literal["grpo", "sdpo", "distill"] = "sdpo"
 
     # Optimizer configuration
     num_substeps: int = 1
@@ -146,8 +144,16 @@ async def cli_main(cli_config: CLIConfig):
     else:
         wandb_name = os.path.basename(log_path)
 
+    # Resolve kl_penalty_coef: GRPO uses no teacher KL by default; SDPO/distill use 1.0.
+    kl_penalty_coef = cli_config.kl_penalty_coef
+    if kl_penalty_coef is None:
+        kl_penalty_coef = 0.0 if cli_config.algorithm == "grpo" else 1.0
+    logger.info("algorithm=%s  kl_penalty_coef=%s", cli_config.algorithm, kl_penalty_coef)
+
     # SDPO code env: DeepCoder problems graded via sandbox, feedback fed to teacher.
     # batch_size must equal groups_per_batch for CompositeDataset alignment.
+    # GRPO needs execution rewards from the env; SDPO and distill use reward=0.
+    use_execution_reward = (cli_config.algorithm == "grpo")
     dataset_builder = SDPOCodeDatasetBuilder(
         model_name_for_tokenizer=cli_config.model_name,
         batch_size=cli_config.groups_per_batch,
@@ -157,7 +163,7 @@ async def cli_main(cli_config: CLIConfig):
         n_tasks=cli_config.n_tasks,
         n_eval_tasks=cli_config.max_eval_tasks,
         dataset_name=cli_config.dataset_name,
-        use_execution_reward=cli_config.use_execution_reward,
+        use_execution_reward=use_execution_reward,
     )
 
     # Create teacher config
@@ -181,10 +187,9 @@ async def cli_main(cli_config: CLIConfig):
         renderer_name=renderer_name,
         lora_rank=cli_config.lora_rank,
         max_tokens=cli_config.max_tokens,
-        kl_penalty_coef=cli_config.kl_penalty_coef,
+        kl_penalty_coef=kl_penalty_coef,
         kl_discount_factor=cli_config.kl_discount_factor,
-        use_sdpo_teacher_inputs=cli_config.use_sdpo_teacher_inputs,
-        use_execution_reward=cli_config.use_execution_reward,
+        algorithm=cli_config.algorithm,
         num_substeps=cli_config.num_substeps,
         loss_fn=cli_config.loss_fn,
         loss_fn_config=cli_config.loss_fn_config,
