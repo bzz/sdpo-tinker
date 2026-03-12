@@ -15,7 +15,7 @@ Example — SDPO (default):
 Example — GRPO with execution rewards:
     python sdpo_on_policy_distillation.py \
         model_name=Qwen/Qwen3-8B group_size=8 groups_per_batch=8 \
-        algorithm=grpo kl_penalty_coef=0
+        algorithm=grpo
 
 Example — On-policy distillation from a bigger teacher:
     python sdpo_on_policy_distillation.py \
@@ -64,7 +64,7 @@ class CLIConfig:
     learning_rate: float = 1e-4
     max_tokens: int = 4096
     temperature: float = 1.0
-    kl_penalty_coef: float = 1.0
+    kl_penalty_coef: float | None = None  # None = per-algorithm default (0 for grpo, 1 for sdpo/distill)
     kl_discount_factor: float = 0.0
 
     # Training algorithm / baseline:
@@ -144,6 +144,12 @@ async def cli_main(cli_config: CLIConfig):
     else:
         wandb_name = os.path.basename(log_path)
 
+    # Resolve kl_penalty_coef: GRPO uses no teacher KL by default; SDPO/distill use 1.0.
+    kl_penalty_coef = cli_config.kl_penalty_coef
+    if kl_penalty_coef is None:
+        kl_penalty_coef = 0.0 if cli_config.algorithm == "grpo" else 1.0
+    logger.info("algorithm=%s  kl_penalty_coef=%s", cli_config.algorithm, kl_penalty_coef)
+
     # SDPO code env: DeepCoder problems graded via sandbox, feedback fed to teacher.
     # batch_size must equal groups_per_batch for CompositeDataset alignment.
     # GRPO needs execution rewards from the env; SDPO and distill use reward=0.
@@ -181,7 +187,7 @@ async def cli_main(cli_config: CLIConfig):
         renderer_name=renderer_name,
         lora_rank=cli_config.lora_rank,
         max_tokens=cli_config.max_tokens,
-        kl_penalty_coef=cli_config.kl_penalty_coef,
+        kl_penalty_coef=kl_penalty_coef,
         kl_discount_factor=cli_config.kl_discount_factor,
         algorithm=cli_config.algorithm,
         num_substeps=cli_config.num_substeps,
