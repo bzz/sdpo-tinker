@@ -308,8 +308,12 @@ def format_feedback(details: dict[str, Any], max_length: int = 2000) -> str:
 class SDPOCodeEnv(Env):
     """Single-turn code environment for SDPO on-policy distillation.
 
-    Always returns ``reward=0.0`` -- SDPO supervision comes from the KL
+    By default returns ``reward=0.0`` -- SDPO supervision comes from the KL
     penalty against a teacher model, computed in the training loop.
+
+    When ``use_execution_reward=True``, returns ``reward=1.0`` for passing
+    solutions and ``reward=0.0`` for failing ones, enabling GRPO-style
+    training driven by test execution results.
 
     Grading results flow through the standard rollout data path:
     - ``StepResult.metrics``: ``correct`` (1/0), ``has_code`` (1/0)
@@ -325,11 +329,13 @@ class SDPOCodeEnv(Env):
         renderer: renderers.Renderer,
         timeout: int = 6,
         backend: str = "sandboxfusion",
+        use_execution_reward: bool = False,
     ):
         self.task = task
         self.renderer = renderer
         self.timeout = timeout
         self.backend = backend
+        self.use_execution_reward = use_execution_reward
         # Populated by step()
         self.passed: bool = False
         self.feedback: str = ""
@@ -364,8 +370,9 @@ class SDPOCodeEnv(Env):
         metrics["correct"] = float(self.passed)
         metrics["has_code"] = float(self.code is not None)
 
+        reward = float(self.passed) if self.use_execution_reward else 0.0
         return StepResult(
-            reward=0.0,
+            reward=reward,
             episode_done=True,
             next_observation=tinker.ModelInput.empty(),
             next_stop_condition=self.stop_condition,
@@ -452,6 +459,7 @@ class SDPOCodeGroupBuilder(EnvGroupBuilder):
     renderer: renderers.Renderer | None = None
     timeout: int = 6
     backend: str = "sandboxfusion"
+    use_execution_reward: bool = False
 
     async def make_envs(self) -> Sequence[SDPOCodeEnv]:
         if self.renderer is not None:
@@ -461,7 +469,10 @@ class SDPOCodeGroupBuilder(EnvGroupBuilder):
             name = self.renderer_name or self.model_name
             r = renderers.get_renderer(name, tokenizer)
         return [
-            SDPOCodeEnv(task=self.task, renderer=r, timeout=self.timeout, backend=self.backend)
+            SDPOCodeEnv(
+                task=self.task, renderer=r, timeout=self.timeout,
+                backend=self.backend, use_execution_reward=self.use_execution_reward,
+            )
             for _ in range(self.group_size)
         ]
 
@@ -515,6 +526,7 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
     n_eval_tasks: int | None = None
     dataset_name: str | None = None
     seed: int = 42
+    use_execution_reward: bool = False
 
     async def __call__(self) -> tuple[RLDataset, RLDataset | None]:
         train_tasks = load_tasks(split="train", seed=self.seed, dataset_name=self.dataset_name)
@@ -528,6 +540,7 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
                 group_size=self.group_size,
                 timeout=self.timeout,
                 backend=self.backend,
+                use_execution_reward=self.use_execution_reward,
             )
             for task in train_tasks
         ]
@@ -544,6 +557,7 @@ class SDPOCodeDatasetBuilder(RLDatasetBuilder):
                 group_size=1,
                 timeout=self.timeout,
                 backend=self.backend,
+                use_execution_reward=self.use_execution_reward,
             )
             for task in test_tasks
         ]
