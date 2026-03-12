@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval Viewer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/python.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg2:#161b22;--bg3:#1c2333;--border:#30363d;
+  --fg:#c9d1d9;--fg2:#8b949e;--accent:#58a6ff;
+  --green:#3fb950;--red:#f85149;--yellow:#d29922;--orange:#db6d28;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.5;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+
+.container{max-width:1200px;margin:0 auto;padding:1.5rem}
+
+/* Drop zone */
+#drop-zone{
+  border:2px dashed var(--border);border-radius:12px;padding:3rem;
+  text-align:center;cursor:pointer;transition:border-color .2s,background .2s;
+  background:var(--bg2);margin-bottom:1.5rem;
+}
+#drop-zone:hover,#drop-zone.drag-over{border-color:var(--accent);background:var(--bg3)}
+#drop-zone h2{color:var(--fg);font-size:1.15rem;font-weight:500;margin-bottom:.25rem}
+#drop-zone p{color:var(--fg2);font-size:.85rem}
+#file-input{display:none}
+
+/* Header bar */
+.header{display:flex;align-items:baseline;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap}
+.header h1{font-size:1.3rem;font-weight:600;color:var(--fg)}
+.header .filename{color:var(--fg2);font-size:.85rem;font-family:monospace}
+
+/* Stats cards */
+.stats-row{display:flex;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap}
+.stat-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  padding:.6rem 1rem;min-width:100px;text-align:center;
+}
+.stat-card .label{font-size:.7rem;color:var(--fg2);text-transform:uppercase;letter-spacing:.05em}
+.stat-card .value{font-size:1.35rem;font-weight:700;color:var(--accent)}
+
+/* Signal breakdown */
+.signal-table{width:100%;border-collapse:collapse;margin-bottom:1.25rem}
+.signal-table th{
+  text-align:left;padding:.5rem .75rem;font-size:.75rem;
+  color:var(--fg2);text-transform:uppercase;letter-spacing:.04em;
+  border-bottom:1px solid var(--border);
+}
+.signal-table td{padding:.5rem .75rem;border-bottom:1px solid var(--border)}
+.signal-table tr.clickable{cursor:pointer;transition:background .15s}
+.signal-table tr.clickable:hover{background:var(--bg3)}
+.signal-table tr.active{background:var(--bg3)}
+.signal-table .cat-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:.5rem}
+.signal-table .count{font-variant-numeric:tabular-nums;text-align:right}
+.signal-table .frac{color:var(--fg2);text-align:right}
+.signal-table .desc{color:var(--fg2);font-size:.85rem}
+.bar-cell{width:35%}
+.bar-bg{background:var(--bg);border-radius:4px;height:6px;overflow:hidden}
+.bar-fg{height:100%;border-radius:4px;transition:width .4s ease}
+
+/* Problem list */
+.problem-list{display:flex;flex-direction:column;gap:.5rem}
+.problem-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:8px;
+  overflow:hidden;transition:border-color .15s;
+}
+.problem-card:hover{border-color:var(--fg2)}
+.problem-header{
+  display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;
+  cursor:pointer;user-select:none;
+}
+.problem-header .idx{
+  font-family:monospace;font-size:.8rem;color:var(--fg2);min-width:4.5rem;
+}
+.problem-header .badge{
+  font-size:.7rem;font-weight:600;padding:.15rem .5rem;border-radius:4px;
+  text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;
+}
+.badge-pass{background:rgba(63,185,80,.15);color:var(--green)}
+.badge-fail{background:rgba(248,81,73,.15);color:var(--red)}
+.badge-mixed{background:rgba(210,153,34,.15);color:var(--yellow)}
+.problem-header .pass-info{font-variant-numeric:tabular-nums;font-size:.85rem;color:var(--fg2);margin-left:auto;white-space:nowrap}
+.problem-header .timing{font-size:.75rem;color:var(--fg2);font-family:monospace;white-space:nowrap}
+.problem-header .chevron{color:var(--fg2);transition:transform .2s;margin-left:.5rem;font-size:.85rem}
+.problem-card.open .chevron{transform:rotate(90deg)}
+
+/* Samples inside a problem */
+.samples{display:none;border-top:1px solid var(--border)}
+.problem-card.open .samples{display:block}
+.sample{border-bottom:1px solid var(--border)}
+.sample:last-child{border-bottom:none}
+.sample-header{
+  display:flex;align-items:center;gap:.5rem;padding:.45rem 1rem;
+  cursor:pointer;user-select:none;transition:background .12s;
+}
+.sample-header:hover{background:var(--bg3)}
+.sample-body{display:none;padding:0 1rem .75rem 1rem}
+.sample.open .sample-body{display:block}
+.sample-chevron{color:var(--fg2);transition:transform .15s;font-size:.7rem;margin-right:.15rem}
+.sample.open .sample-chevron{transform:rotate(90deg)}
+.sample-num{font-weight:600;font-size:.8rem;color:var(--fg2)}
+.sample-tag{
+  font-size:.65rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;
+}
+.tag-pass{background:rgba(63,185,80,.15);color:var(--green)}
+.tag-fail{background:rgba(248,81,73,.15);color:var(--red)}
+.tag-nocode{background:rgba(219,109,40,.15);color:var(--orange)}
+.sample-meta{font-size:.75rem;color:var(--fg2);margin-left:auto;font-family:monospace;white-space:nowrap}
+.sample-preview{font-size:.75rem;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:40ch}
+
+/* Conversation: user + assistant messages */
+.conv-label{
+  font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+  margin-bottom:.25rem;padding:.15rem .4rem;border-radius:3px;display:inline-block;
+}
+.conv-label-user{background:rgba(88,166,255,.12);color:var(--accent)}
+.conv-label-assistant{background:rgba(139,148,158,.12);color:var(--fg2)}
+.conv-user{
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  padding:.6rem .85rem;margin-bottom:.5rem;
+  font-size:.82rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;
+  max-height:300px;overflow-y:auto;color:var(--fg2);
+}
+.conv-user::-webkit-scrollbar{width:6px}
+.conv-user::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.response-block{
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  padding:.75rem 1rem;margin-top:.5rem;overflow-x:auto;
+  font-size:.82rem;line-height:1.6;white-space:pre-wrap;word-break:break-word;
+  max-height:600px;overflow-y:auto;
+}
+.response-block pre{margin:0;white-space:pre;overflow-x:auto}
+.response-block pre code{font-size:.8rem}
+.feedback-block{
+  margin-top:.5rem;padding:.5rem .75rem;border-radius:6px;
+  background:rgba(248,81,73,.08);border-left:3px solid var(--red);
+  font-size:.8rem;color:var(--fg2);white-space:pre-wrap;word-break:break-word;
+  max-height:200px;overflow-y:auto;
+}
+
+/* Scroll shadow for long content */
+.response-block::-webkit-scrollbar,.feedback-block::-webkit-scrollbar{width:6px}
+.response-block::-webkit-scrollbar-thumb,.feedback-block::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.filter-label{
+  font-size:.8rem;color:var(--fg2);margin-bottom:.75rem;
+  display:flex;align-items:center;gap:.5rem;
+}
+.filter-label button{
+  background:var(--bg3);border:1px solid var(--border);color:var(--accent);
+  border-radius:4px;padding:.15rem .5rem;font-size:.75rem;cursor:pointer;
+}
+.filter-label button:hover{background:var(--border)}
+
+.empty-state{text-align:center;padding:3rem;color:var(--fg2)}
+
+/* Expand/collapse all */
+.list-actions{display:flex;gap:.5rem;margin-bottom:.75rem}
+.list-actions button{
+  background:var(--bg3);border:1px solid var(--border);color:var(--fg2);
+  border-radius:4px;padding:.25rem .6rem;font-size:.75rem;cursor:pointer;
+}
+.list-actions button:hover{background:var(--border);color:var(--fg)}
+</style>
+</head>
+<body>
+<div class="container">
+  <div id="drop-zone">
+    <h2>Drop a .jsonl eval cache file here</h2>
+    <p>or click to browse &mdash; output from <code>eval_pass_at_k.py</code></p>
+    <input type="file" id="file-input" accept=".jsonl,.json,.txt">
+  </div>
+  <div id="app" style="display:none"></div>
+</div>
+
+<script>
+"use strict";
+
+const $ = s => document.querySelector(s);
+const dropZone = $("#drop-zone");
+const fileInput = $("#file-input");
+const app = $("#app");
+
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => { e.preventDefault(); dropZone.classList.remove("drag-over"); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener("change", () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const lines = reader.result.split("\n").filter(l => l.trim());
+    const results = lines.map(l => JSON.parse(l));
+    results.sort((a, b) => a.task_idx - b.task_idx);
+    render(results, file.name);
+  };
+  reader.readAsText(file);
+}
+
+/* ── pass@k estimator ── */
+function comb(n, k) {
+  if (k > n || k < 0) return 0;
+  if (k === 0 || k === n) return 1;
+  let r = 1;
+  for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1);
+  return Math.round(r);
+}
+function passAtK(n, c, k) {
+  if (n - c < k) return 1.0;
+  return 1.0 - comb(n - c, k) / comb(n, k);
+}
+
+function renderResponse(text) {
+  const re = /```(\w*)\s*\n([\s\S]*?)```/g;
+  let last = 0;
+  const parts = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(esc(text.slice(last, m.index)));
+    const lang = m[1] || "python";
+    const code = m[2];
+    let highlighted;
+    try { highlighted = hljs.highlight(code, { language: lang }).value; }
+    catch { highlighted = esc(code); }
+    parts.push(esc("```" + m[1]) + "\n<pre style=\"margin:0\"><code class=\"hljs\">" + highlighted + "</code></pre>" + esc("```"));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(esc(text.slice(last)));
+  return parts.join("");
+}
+
+function esc(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* ── Categorise problems ── */
+function categorise(r) {
+  if (r.n_passed === r.n) return "all_pass";
+  if (r.n_passed === 0) return "all_fail";
+  return "mixed";
+}
+
+const CAT_META = {
+  all_pass: { label: "All pass", cls: "badge-pass", color: "var(--green)", desc: "No gradient (no failures)" },
+  all_fail: { label: "All fail", cls: "badge-fail", color: "var(--red)", desc: "KL signal but no sibling solution" },
+  mixed:    { label: "Mixed",    cls: "badge-mixed", color: "var(--yellow)", desc: "Full SDPO signal (sibling + failures)" },
+};
+
+/* ── Main render ── */
+function render(results, filename) {
+  dropZone.style.display = "none";
+  app.style.display = "block";
+
+  const n = results.length;
+  const sampleN = results[0]?.n || 1;
+
+  // Detect k values: 1..sampleN that are powers of 2 (matching common usage)
+  const ks = [];
+  for (let k = 1; k <= sampleN; k *= 2) ks.push(k);
+  if (ks[ks.length - 1] !== sampleN && sampleN > 1) ks.push(sampleN);
+
+  // pass@k
+  const passKScores = {};
+  for (const k of ks) {
+    const scores = results.map(r => passAtK(r.n, r.n_passed, k));
+    passKScores[k] = scores.reduce((a, b) => a + b, 0) / scores.length;
+  }
+  const meanPassRate = results.reduce((s, r) => s + r.n_passed / r.n, 0) / n;
+
+  // categories
+  const cats = { all_pass: [], all_fail: [], mixed: [] };
+  results.forEach(r => cats[categorise(r)].push(r));
+
+  let activeFilter = null;
+
+  function filteredResults() {
+    return activeFilter ? cats[activeFilter] : results;
+  }
+
+  // Build HTML
+  let statsHtml = "";
+  for (const k of ks) {
+    statsHtml += `<div class="stat-card"><div class="label">pass@${k}</div><div class="value">${(passKScores[k]*100).toFixed(1)}%</div></div>`;
+  }
+  statsHtml += `<div class="stat-card"><div class="label">mean pass</div><div class="value">${(meanPassRate*100).toFixed(1)}%</div></div>`;
+  statsHtml += `<div class="stat-card"><div class="label">problems</div><div class="value">${n}</div></div>`;
+  statsHtml += `<div class="stat-card"><div class="label">samples/prob</div><div class="value">${sampleN}</div></div>`;
+
+  let signalHtml = "";
+  for (const cat of ["all_pass", "all_fail", "mixed"]) {
+    const m = CAT_META[cat];
+    const cnt = cats[cat].length;
+    const frac = n ? cnt / n : 0;
+    signalHtml += `<tr class="clickable" data-cat="${cat}">
+      <td><span class="cat-dot" style="background:${m.color}"></span>${m.label}</td>
+      <td class="count">${cnt}</td>
+      <td class="frac">${(frac * 100).toFixed(0)}%</td>
+      <td class="bar-cell"><div class="bar-bg"><div class="bar-fg" style="width:${frac*100}%;background:${m.color}"></div></div></td>
+      <td class="desc">${m.desc}</td>
+    </tr>`;
+  }
+
+  app.innerHTML = `
+    <div class="header">
+      <h1>Eval Viewer</h1>
+      <span class="filename">${esc(filename)}</span>
+    </div>
+    <div class="stats-row">${statsHtml}</div>
+    <table class="signal-table">
+      <thead><tr><th>Category</th><th style="text-align:right">Count</th><th style="text-align:right">%</th><th>Distribution</th><th>SDPO Signal</th></tr></thead>
+      <tbody>${signalHtml}</tbody>
+    </table>
+    <div class="filter-label" id="filter-label" style="display:none">
+      Showing: <strong id="filter-name"></strong>
+      <button id="clear-filter">show all</button>
+    </div>
+    <div class="list-actions">
+      <button id="expand-all">expand all</button>
+      <button id="collapse-all">collapse all</button>
+    </div>
+    <div class="problem-list" id="problem-list"></div>
+  `;
+
+  const problemList = $("#problem-list");
+  const filterLabel = $("#filter-label");
+  const filterName = $("#filter-name");
+
+  function renderProblems() {
+    const list = filteredResults();
+    if (!list.length) {
+      problemList.innerHTML = `<div class="empty-state">No problems in this category.</div>`;
+      return;
+    }
+    problemList.innerHTML = list.map(r => {
+      const cat = categorise(r);
+      const m = CAT_META[cat];
+      const pk1 = passAtK(r.n, r.n_passed, 1);
+      const promptHtml = r.prompt
+        ? `<div class="conv-label conv-label-user">user</div><div class="conv-user">${esc(r.prompt)}</div>`
+        : "";
+      const samplesHtml = r.samples.map((s, si) => {
+        const tagCls = s.correct ? "tag-pass" : (s.has_code ? "tag-fail" : "tag-nocode");
+        const tagText = s.correct ? "PASS" : (s.has_code ? "FAIL" : "NO CODE");
+        const preview = (s.response || "").replace(/\s+/g, " ").slice(0, 80);
+        return `<div class="sample">
+          <div class="sample-header">
+            <span class="sample-chevron">&#9654;</span>
+            <span class="sample-num">#${si + 1}</span>
+            <span class="sample-tag ${tagCls}">${tagText}</span>
+            <span class="sample-preview">${esc(preview)}</span>
+            <span class="sample-meta">${s.n_tokens} tok</span>
+          </div>
+          <div class="sample-body">
+            <div class="conv-label conv-label-assistant">assistant</div>
+            <div class="response-block">${renderResponse(s.response)}</div>
+            ${s.feedback ? `<div class="feedback-block">${esc(s.feedback)}</div>` : ""}
+          </div>
+        </div>`;
+      }).join("");
+
+      return `<div class="problem-card" data-idx="${r.task_idx}">
+        <div class="problem-header">
+          <span class="idx">#${r.task_idx + 1}/${n}</span>
+          <span class="badge ${m.cls}">${m.label}</span>
+          <span style="font-size:.85rem">${r.n_passed}/${r.n}</span>
+          <span class="pass-info">pass@1=${(pk1*100).toFixed(0)}%</span>
+          <span class="timing">api ${r.dt_api?.toFixed(1) ?? "?"}s &middot; grade ${r.dt_grade?.toFixed(1) ?? "?"}s</span>
+          <span class="chevron">&#9654;</span>
+        </div>
+        <div class="samples">
+          ${promptHtml ? `<div style="padding:.75rem 1rem;border-bottom:1px solid var(--border)">${promptHtml}</div>` : ""}
+          ${samplesHtml}
+        </div>
+      </div>`;
+    }).join("");
+
+    problemList.querySelectorAll(".problem-header").forEach(h => {
+      h.addEventListener("click", () => h.parentElement.classList.toggle("open"));
+    });
+    problemList.querySelectorAll(".sample-header").forEach(h => {
+      h.addEventListener("click", e => { e.stopPropagation(); h.parentElement.classList.toggle("open"); });
+    });
+  }
+
+  // Signal table click -> filter
+  app.querySelectorAll(".signal-table tr.clickable").forEach(tr => {
+    tr.addEventListener("click", () => {
+      const cat = tr.dataset.cat;
+      if (activeFilter === cat) {
+        activeFilter = null;
+      } else {
+        activeFilter = cat;
+      }
+      app.querySelectorAll(".signal-table tr.clickable").forEach(r => r.classList.toggle("active", r.dataset.cat === activeFilter));
+      if (activeFilter) {
+        filterLabel.style.display = "flex";
+        filterName.textContent = `${CAT_META[activeFilter].label} (${cats[activeFilter].length})`;
+      } else {
+        filterLabel.style.display = "none";
+      }
+      renderProblems();
+    });
+  });
+
+  $("#clear-filter").addEventListener("click", () => {
+    activeFilter = null;
+    app.querySelectorAll(".signal-table tr.clickable").forEach(r => r.classList.remove("active"));
+    filterLabel.style.display = "none";
+    renderProblems();
+  });
+
+  $("#expand-all").addEventListener("click", () => {
+    problemList.querySelectorAll(".problem-card").forEach(c => c.classList.add("open"));
+  });
+  $("#collapse-all").addEventListener("click", () => {
+    problemList.querySelectorAll(".problem-card").forEach(c => c.classList.remove("open"));
+  });
+
+  renderProblems();
+}
+</script>
+</body>
+</html>
