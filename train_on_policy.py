@@ -397,7 +397,7 @@ async def prepare_minibatch(
         env_group_builders_P, trajectory_groups_P, tokenizer, dataset_indices_P
     )
 
-    # For GRPO: also print an advantage-colored sample to show the reward signal.
+    # Print advantage-colored sample when execution rewards produce non-trivial advantages
     if use_execution_reward:
         printed_datasets_adv: set[int] = set()
         for datum, metadata in zip(data_D, metadata_D):
@@ -409,6 +409,7 @@ async def prepare_minibatch(
                 )
                 printed_datasets_adv.add(dataset_idx)
 
+    # Incorporate KL penalty if configured
     if kl_penalty_coef > 0:
         with timed("build_teacher_inputs", metrics):
             teacher_inputs_D = [
@@ -457,6 +458,7 @@ async def prepare_minibatch_sdpo(
         env_group_builders_P, trajectory_groups_P, tokenizer, dataset_indices_P
     )
 
+    # Incorporate KL penalty if configured
     if kl_penalty_coef > 0:
         with timed("build_teacher_inputs", metrics):
             # SDPO: teacher is reprompted with execution feedback + sibling solution.
