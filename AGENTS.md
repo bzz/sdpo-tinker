@@ -78,3 +78,16 @@ The Rich output is identical to the interactive `[g]enerate` flow: rollout panel
 - After rollout, reads all display data directly from trajectory transitions: `metrics["correct"]`, `metrics["has_code"]`, `logs["feedback"]`, `ac.tokens`, `ac.logprobs`.
 - Teacher logprob computation uses `build_sdpo_teacher_inputs` (from env.py) + `sampling_client.compute_logprobs_async` -- the same code path that training will use.
 - UI uses `rich` for TUI: `Panel` for side-by-side rollout display, `Progress` bars, `Syntax` for code/JSON, `Text` with per-token RGB styles for logprob visualisation.
+
+## Cursor Cloud specific instructions
+
+- **Python venv**: The project uses a `.venv` virtualenv at `/workspace/.venv`. Always activate it before running commands: `source /workspace/.venv/bin/activate`.
+- **Tinker API**: Requires `TINKER_API_KEY` environment variable (injected as a secret). All generation and training commands call the remote Tinker API and consume real tokens.
+- **Dataset caveat**: The `lcbv6` dataset (`bzz2/live_code_bench_v6_lite_sdpo`) is private on HuggingFace. Use `--dataset lcbv5` (public DeepCoder/lcbv5 split) for smoke tests instead. First load downloads ~100 MB from HuggingFace Hub and caches locally.
+- **Sandbox**: Use `--sandbox local` (or `sandbox_backend=local`) for cloud agent runs — no Docker or bubblewrap needed. The local backend runs code as a subprocess.
+- **Lint**: Run `ruff check *.py` from the workspace root. No project-level ruff config exists; default rules apply. Pre-existing lint issues exist (unused imports in `experiment_teacher_prompts.py`, shadowed `sandbox` import in `play_w_code_env.py`).
+- **Tests**: No automated test suite exists. Validation is done by running the entry points (see "Validating changes non-interactively" above).
+- **Smoke test command** (recommended for validating changes):
+  ```bash
+  python play_w_code_env.py --n-tasks 2 --model Qwen/Qwen3-4B-Instruct-2507 -n 2 --seed 44 --dataset lcbv5 --generate --sandbox local
+  ```
